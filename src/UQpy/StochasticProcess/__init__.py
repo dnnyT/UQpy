@@ -34,7 +34,7 @@ The module currently contains the following classes:
 
 from UQpy.StochasticProcess.SRM import SRM
 from UQpy.StochasticProcess.BSRM import BSRM
-from UQpy.StochasticProcess.KLE import KLE
+from UQpy.StochasticProcess.KLE import KLE, KLE_Two_Dimension
 from UQpy.StochasticProcess.Translation import Translation
 from UQpy.StochasticProcess.InverseTranslation import InverseTranslation
 

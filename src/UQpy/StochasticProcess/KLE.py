@@ -1,3 +1,4 @@
+import numpy as np
 from scipy.linalg import sqrtm
 
 from UQpy.Utilities import *
@@ -132,3 +133,37 @@ class KLE:
 
         if self.verbose:
             print('UQpy: Stochastic Process: Karhunen-Loeve Expansion Complete.')
+
+
+class KLE_Two_Dimension:
+
+    def __init__(self, nsamples, correlation_function, time_interval):
+        self.nsamples = nsamples
+        self.correlation_function = correlation_function
+        self.time_interval = time_interval
+        self.samples = 0
+        self.xi = None
+
+        self._precompute_one_dimensional_correlation_function()
+
+        if self.nsamples is not None:
+            self.run(nsamples=self.nsamples)
+
+        self.samples = np.reshape(self.samples, [self.samples.shape[0], 1, self.samples.shape[1], self.samples.shape[2]])
+
+    def _precompute_one_dimensional_correlation_function(self):
+        self.quasi_correlation_function = np.diagonal(self.correlation_function, axis1=0, axis2=1)
+        self.quasi_correlation_function = np.einsum('ij... -> ...ij', self.quasi_correlation_function)
+        self.w, self.v = np.linalg.eig(self.quasi_correlation_function)
+        self.w = np.real(self.w)
+        self.v = np.real(self.v)
+        self.one_dimensional_correlation_function = np.einsum('uvxy, uxn, vyn, un, vn -> nuv',
+                                                              self.correlation_function, self.v, self.v,
+                                                              1 / np.sqrt(self.w), 1 / np.sqrt(self.w))
+
+    def run(self, nsamples):
+        for i in range(self.one_dimensional_correlation_function.shape[0]):
+            self.samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
+                                      KLE(nsamples=nsamples,
+                                          correlation_function=self.one_dimensional_correlation_function[i],
+                                          time_interval=0.05).samples[:, 0, :])
