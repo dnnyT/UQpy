@@ -157,6 +157,8 @@ class KLE_Two_Dimension:
         self.quasi_correlation_function = np.diagonal(self.correlation_function, axis1=0, axis2=1)
         self.quasi_correlation_function = np.einsum('ij... -> ...ij', self.quasi_correlation_function)
         self.w, self.v = np.linalg.eig(self.quasi_correlation_function)
+        if np.norm(np.imag(self.w)) > 0:
+            print('Complex in the eigenvalues, check the positive definiteness')
         self.w = np.real(self.w)
         self.v = np.real(self.v)
         if self.thresholds is not None:
