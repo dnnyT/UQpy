@@ -137,10 +137,11 @@ class KLE:
 
 class KLE_Two_Dimension:
 
-    def __init__(self, nsamples, correlation_function, time_interval):
+    def __init__(self, nsamples, correlation_function, time_interval, thresholds=None):
         self.nsamples = nsamples
         self.correlation_function = correlation_function
         self.time_interval = time_interval
+        self.thresholds = thresholds
         self.samples = 0
         self.xi = None
 
@@ -149,7 +150,8 @@ class KLE_Two_Dimension:
         if self.nsamples is not None:
             self.run(nsamples=self.nsamples)
 
-        self.samples = np.reshape(self.samples, [self.samples.shape[0], 1, self.samples.shape[1], self.samples.shape[2]])
+        self.samples = np.reshape(self.samples,
+                                  [self.samples.shape[0], 1, self.samples.shape[1], self.samples.shape[2]])
 
     def _precompute_one_dimensional_correlation_function(self):
         self.quasi_correlation_function = np.diagonal(self.correlation_function, axis1=0, axis2=1)
@@ -157,13 +159,23 @@ class KLE_Two_Dimension:
         self.w, self.v = np.linalg.eig(self.quasi_correlation_function)
         self.w = np.real(self.w)
         self.v = np.real(self.v)
+        if self.thresholds is not None:
+            self.w = self.w[:, :self.thresholds[1]]
+            self.v = self.v[:, :, :self.thresholds[1]]
         self.one_dimensional_correlation_function = np.einsum('uvxy, uxn, vyn, un, vn -> nuv',
                                                               self.correlation_function, self.v, self.v,
                                                               1 / np.sqrt(self.w), 1 / np.sqrt(self.w))
 
     def run(self, nsamples):
         for i in range(self.one_dimensional_correlation_function.shape[0]):
-            self.samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
-                                      KLE(nsamples=nsamples,
-                                          correlation_function=self.one_dimensional_correlation_function[i],
-                                          time_interval=0.05).samples[:, 0, :])
+            if self.thresholds is not None:
+                self.samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
+                                          KLE(nsamples=nsamples,
+                                              correlation_function=self.one_dimensional_correlation_function[i],
+                                              time_interval=self.time_interval, threshold=self.thresholds[0]).samples[:,
+                                          0, :])
+            else:
+                self.samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
+                                          KLE(nsamples=nsamples,
+                                              correlation_function=self.one_dimensional_correlation_function[i],
+                                              time_interval=self.time_interval).samples[:, 0, :])
