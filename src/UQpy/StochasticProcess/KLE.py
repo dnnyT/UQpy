@@ -53,7 +53,8 @@ class KLE:
 
     # TODO: Test this for non-stationary processes.
 
-    def __init__(self, nsamples, correlation_function, time_interval, threshold=None, random_state=None, verbose=False):
+    def __init__(self, nsamples, correlation_function, time_interval, threshold=None, random_state=None,
+                 random_variables=None, verbose=False):
         self.correlation_function = correlation_function
         self.time_interval = time_interval
         if threshold:
@@ -62,6 +63,7 @@ class KLE:
             self.number_eigen_values = len(self.correlation_function[0])
 
         self.random_state = random_state
+
         if isinstance(self.random_state, int):
             np.random.seed(self.random_state)
         elif not isinstance(self.random_state, (type(None), np.random.RandomState)):
@@ -69,12 +71,8 @@ class KLE:
 
         self.verbose = verbose
         self.nsamples = nsamples
-
         self.samples = None
-        self.xi = None
-
-        if self.nsamples is not None:
-            self.run(nsamples=self.nsamples)
+        self.run(self.nsamples, random_variables)
 
     def _simulate(self, xi):
         lam, phi = np.linalg.eig(self.correlation_function)
@@ -87,7 +85,7 @@ class KLE:
         samples = samples[:, np.newaxis]
         return samples
 
-    def run(self, nsamples):
+    def run(self, nsamples=None, random_variables=None):
         """
         Execute the random sampling in the ``KLE`` class.
 
@@ -121,15 +119,21 @@ class KLE:
 
         if self.verbose:
             print('UQpy: Stochastic Process: Starting simulation of Stochastic Processes.')
-        xi = np.random.normal(size=(self.number_eigen_values, self.nsamples))
-        samples = self._simulate(xi)
+
+        if random_variables is not None and random_variables.shape == (self.number_eigen_values, self.nsamples):
+            print('UQpy: Stochastic Process: Using user defined random variables')
+        else:
+            print('UQpy: Stochastic Process; Using computer generated random variables')
+            random_variables = np.random.normal(size=(self.number_eigen_values, self.nsamples))
+
+        samples = self._simulate(random_variables)
 
         if self.samples is None:
             self.samples = samples
-            self.xi = xi
+            self.xi = random_variables
         else:
             self.samples = np.concatenate((self.samples, samples), axis=0)
-            self.xi = np.concatenate((self.xi, xi), axis=0)
+            self.xi = np.concatenate((self.xi, random_variables), axis=1)
 
         if self.verbose:
             print('UQpy: Stochastic Process: Karhunen-Loeve Expansion Complete.')
@@ -137,27 +141,33 @@ class KLE:
 
 class KLE_Two_Dimension:
 
-    def __init__(self, nsamples, correlation_function, time_interval, thresholds=None):
+    def __init__(self, nsamples, correlation_function, time_interval, thresholds=None, random_state=None,
+                 random_variables=None):
         self.nsamples = nsamples
         self.correlation_function = correlation_function
+        assert (len(self.correlation_function.shape) == 4)
         self.time_interval = time_interval
         self.thresholds = thresholds
-        self.samples = 0
-        self.xi = None
+        self.random_state = random_state
+
+        if isinstance(self.random_state, int):
+            np.random.seed(self.random_state)
+        elif not isinstance(self.random_state, (type(None), np.random.RandomState)):
+            raise TypeError('UQpy: random_state must be None, an int or an np.random.RandomState object.')
+
+        self.samples = None
+        self.random_variables = random_variables
 
         self._precompute_one_dimensional_correlation_function()
 
         if self.nsamples is not None:
-            self.run(nsamples=self.nsamples)
-
-        self.samples = np.reshape(self.samples,
-                                  [self.samples.shape[0], 1, self.samples.shape[1], self.samples.shape[2]])
+            self.run(nsamples=self.nsamples, random_variables=random_variables)
 
     def _precompute_one_dimensional_correlation_function(self):
         self.quasi_correlation_function = np.diagonal(self.correlation_function, axis1=0, axis2=1)
         self.quasi_correlation_function = np.einsum('ij... -> ...ij', self.quasi_correlation_function)
         self.w, self.v = np.linalg.eig(self.quasi_correlation_function)
-        if np.norm(np.imag(self.w)) > 0:
+        if np.linalg.norm(np.imag(self.w)) > 0:
             print('Complex in the eigenvalues, check the positive definiteness')
         self.w = np.real(self.w)
         self.v = np.real(self.v)
@@ -168,16 +178,30 @@ class KLE_Two_Dimension:
                                                               self.correlation_function, self.v, self.v,
                                                               1 / np.sqrt(self.w), 1 / np.sqrt(self.w))
 
-    def run(self, nsamples):
+    def run(self, nsamples, random_variables=None):
+        samples = 0
+        if random_variables is None:
+            random_variables = np.random.normal(size=[self.thresholds[1], self.thresholds[0], nsamples])
+        else:
+            assert (random_variables.shape == (self.thresholds[1], self.thresholds[0], nsamples))
         for i in range(self.one_dimensional_correlation_function.shape[0]):
             if self.thresholds is not None:
-                self.samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
-                                          KLE(nsamples=nsamples,
-                                              correlation_function=self.one_dimensional_correlation_function[i],
-                                              time_interval=self.time_interval, threshold=self.thresholds[0]).samples[:,
-                                          0, :])
+                samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
+                                     KLE(nsamples=nsamples,
+                                         correlation_function=self.one_dimensional_correlation_function[i],
+                                         time_interval=self.time_interval, threshold=self.thresholds[0],
+                                         random_variables=random_variables[i]).samples[:, 0, :])
             else:
-                self.samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
-                                          KLE(nsamples=nsamples,
-                                              correlation_function=self.one_dimensional_correlation_function[i],
-                                              time_interval=self.time_interval).samples[:, 0, :])
+                samples += np.einsum('x, xt, nx -> nxt', np.sqrt(self.w[:, i]), self.v[:, :, i],
+                                     KLE(nsamples=nsamples,
+                                         correlation_function=self.one_dimensional_correlation_function[i],
+                                         time_interval=self.time_interval,
+                                         random_variables=random_variables[i]).samples[:, 0, :])
+        samples = np.reshape(samples, [samples.shape[0], 1, samples.shape[1], samples.shape[2]])
+
+        if self.samples is None:
+            self.samples = samples
+            self.xi = random_variables
+        else:
+            self.samples = np.concatenate((self.samples, samples), axis=0)
+            self.xi = np.concatenate((self.xi, random_variables), axis=2)

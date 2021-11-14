@@ -23,3 +23,11 @@ def test_samples_shape():
 
 def test_samples_values():
     assert np.isclose(samples[27, 0, 246], 0.22392952712490516, rtol=0.01)
+
+
+def test_user_passed_random_variables():
+    computer_generated_random_variables = KLE_Object.xi
+    KLE_Object2 = KLE(n_sim, R, dt, verbose=True, random_variables=computer_generated_random_variables)
+    samples2 = KLE_Object2.samples
+    assert (samples2.shape == samples.shape)
+    assert (np.allclose(samples, samples2))
