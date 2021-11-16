@@ -21,7 +21,7 @@ class TemperingMCMC(ABC):
     """
 
     def __init__(self, pdf_intermediate=None, log_pdf_intermediate=None, args_pdf_intermediate=(),
-                 log_pdf_reference=None, pdf_reference=None, dimension=None, save_log_pdf=False, verbose=False,
+                 distribution_reference=None, dimension=None, save_log_pdf=False, verbose=False,
                  random_state=None):
 
         # Check a few inputs
@@ -39,8 +39,7 @@ class TemperingMCMC(ABC):
         print(type(args_pdf_intermediate))
         self.evaluate_log_intermediate = self._preprocess_intermediate(
             log_pdf_=log_pdf_intermediate, pdf_=pdf_intermediate, args=args_pdf_intermediate)
-        self.evaluate_log_reference = self._preprocess_reference(
-            log_pdf_=log_pdf_reference, pdf_=pdf_reference, args=())
+        # self.evaluate_log_reference = self._preprocess_reference(dist_=distribution_reference, args=())
 
         # Initialize the outputs
         self.samples = None
@@ -56,8 +55,7 @@ class TemperingMCMC(ABC):
          and q1 is the intermediate density with :math:`\beta=1`, thus q1 p0 is the target pdf."""
         pass
 
-    @staticmethod
-    def _preprocess_reference(log_pdf_, pdf_, args):
+    def _preprocess_reference(self, dist_, args, seed_=None, nsamples=None, dimension=None):
         """
         Preprocess the target pdf inputs.
 
@@ -79,21 +77,11 @@ class TemperingMCMC(ABC):
 
         """
         # log_pdf is provided
-        if log_pdf_ is not None:
-            if callable(log_pdf_):
-                if args is None:
-                    args = ()
-                evaluate_log_pdf = (lambda x: log_pdf_(x, *args))
+        if dist_ is not None:
+            if isinstance(dist_, Distribution):
+                evaluate_log_pdf = (lambda x: dist_.log_pdf(x, *args))
             else:
-                raise TypeError('UQpy: log_pdf_reference must be a callable')
-        # pdf is provided
-        elif pdf_ is not None:
-            if callable(pdf_):
-                if args is None:
-                    args = ()
-                evaluate_log_pdf = (lambda x: np.log(np.maximum(pdf_(x, *args), 10 ** (-320) * np.ones((x.shape[0],)))))
-            else:
-                raise TypeError('UQpy: pdf_reference must be a callable')
+                raise TypeError('UQpy: A UQpy.Distribution object must be provided.')
         else:
             evaluate_log_pdf = None
         return evaluate_log_pdf
@@ -141,6 +129,11 @@ class TemperingMCMC(ABC):
             raise ValueError('UQpy: log_pdf_intermediate or pdf_intermediate must be provided')
         return evaluate_log_pdf
 
+    @staticmethod
+    def _target_generator(intermediate_logpdf_, reference_logpdf_, temper_param_):
+        evaluate_log_pdf = (lambda x: (reference_logpdf_(x) + intermediate_logpdf_(x, temper_param_)))
+        return evaluate_log_pdf
+
 
 class ParallelTemperingMCMC(TemperingMCMC):
     """
@@ -176,9 +169,8 @@ class ParallelTemperingMCMC(TemperingMCMC):
                  random_state=None, betas=None, nbetas=None, mcmc_class=MH, **kwargs_mcmc):
 
         super().__init__(pdf_intermediate=pdf_intermediate, log_pdf_intermediate=log_pdf_intermediate,
-                         args_pdf_intermediate=args_pdf_intermediate, log_pdf_reference=log_pdf_reference,
-                         pdf_reference=pdf_reference, dimension=dimension, save_log_pdf=save_log_pdf, verbose=verbose,
-                         random_state=random_state)
+                         args_pdf_intermediate=args_pdf_intermediate, distribution_reference=None, dimension=dimension,
+                         save_log_pdf=save_log_pdf, verbose=verbose, random_state=random_state)
 
         # Initialize PT specific inputs: niter_between_sweeps and temperatures
         self.niter_between_sweeps = niter_between_sweeps
@@ -404,21 +396,30 @@ class SequentialTemperingMCMC(TemperingMCMC):
     """
 
     def __init__(self, pdf_intermediate=None, log_pdf_intermediate=None, args_pdf_intermediate=(),
-                 log_pdf_reference=None, pdf_reference=None, dimension=None, prior=None, seed=None,
-                 save_log_pdf=False, nsamples=None, verbose=False, random_state=None, recalc_w=False, nburn_resample=0,
-                 save_intermediate_samples=False, nburn_mcmc=0, mcmc_class=MH, proposal=None,
-                 proposal_is_symmetric=False, **kwargs_mcmc):
+                 distribution_reference=None, dimension=None, seed=None, nsamples=None, recalc_w=False,
+                 nburn_resample=0, nburn_mcmc=0, jump_mcmc=1, save_intermediate_samples=False, nchains=1,
+                 percentage_resampling=100, mcmc_class=MH, proposal=None, proposal_is_symmetric=False,
+                 save_log_pdf=False, verbose=False, random_state=None, **kwargs_mcmc):
 
         super().__init__(pdf_intermediate=pdf_intermediate, log_pdf_intermediate=log_pdf_intermediate,
-                         args_pdf_intermediate=args_pdf_intermediate, log_pdf_reference=log_pdf_reference,
-                         pdf_reference=pdf_reference, dimension=dimension, save_log_pdf=save_log_pdf, verbose=verbose,
-                         random_state=random_state)
+                         args_pdf_intermediate=args_pdf_intermediate, distribution_reference=distribution_reference,
+                         dimension=dimension, save_log_pdf=save_log_pdf, verbose=verbose, random_state=random_state)
 
         # Initialize inputs
         self.save_intermediate_samples = save_intermediate_samples
         self.recalc_w = recalc_w
         self.nburn_resample = nburn_resample
         self.nburn_mcmc = nburn_mcmc
+        self.jump_mcmc = jump_mcmc
+        self.nchains = nchains
+        self.resample_frac = percentage_resampling / 100
+
+        self.nspc = int(np.floor(((1 - self.resample_frac) * nsamples) / self.nchains))
+        self.nresample = int(nsamples - (self.nspc * self.nchains))
+
+        if not issubclass(mcmc_class, MCMC):
+            raise ValueError('UQpy: mcmc_class should be a subclass of MCMC.')
+        self.mcmc_class = mcmc_class
 
         self.random_state = random_state
         if isinstance(self.random_state, int):
@@ -427,8 +428,9 @@ class SequentialTemperingMCMC(TemperingMCMC):
             raise TypeError('UQpy: random_state must be None, an int or an np.random.RandomState object.')
 
         # Initialize input distributions
-        self.evaluate_log_reference, self.seed = self._preprocess_startup(seed_=seed, prior_=prior, nsamples=nsamples,
-                                                                          dimension=self.dimension)
+        self.evaluate_log_reference, self.seed = self._preprocess_reference(dist_=distribution_reference, args=(),
+                                                                            seed_=seed, nsamples=nsamples,
+                                                                            dimension=self.dimension)
 
         self.proposal = proposal
         self.proposal_is_symmetric = proposal_is_symmetric
@@ -469,7 +471,6 @@ class SequentialTemperingMCMC(TemperingMCMC):
         temper_param = 0.0   # Intermediate exponent
         temper_param_prev = temper_param
         self.temper_param_list = np.array(temper_param)
-        pts_norm = np.zeros_like(pts)
         pts_index = np.arange(nsamples)     # Array storing sample indices
         w = np.zeros(nsamples)              # Array storing plausibility weights
         wp = np.zeros(nsamples)             # Array storing plausibility weight probabilities
@@ -506,52 +507,44 @@ class SequentialTemperingMCMC(TemperingMCMC):
             # Normalize plausibility weight probabilities
             wp = (w / w_sum)
 
-            # Normalizing points
-            pts_mean = np.mean(pts, axis=0)
-            pts_std = np.std(pts, axis=0)
-            for i in range(nsamples):
-                for j in range(self.dimension):
-                    pts_norm[i, j] = (pts[i, j] - pts_mean[j]) / pts_std[j]
-
             # Calculate covariance matrix for the default proposal
             cov_scale = 0.2
             w_th_sum = np.zeros(self.dimension)
             for i in range(nsamples):
                 for j in range(self.dimension):
-                    w_th_sum[j] += w[i] * pts_norm[i, j]
+                    w_th_sum[j] += w[i] * pts[i, j]
             sig_mat = np.zeros((self.dimension, self.dimension))
             for i in range(nsamples):
                 pts_deviation = np.zeros((self.dimension, 1))
                 for j in range(self.dimension):
-                    pts_deviation[j, 0] = pts_norm[i, j] - (w_th_sum[j] / w_sum)
+                    pts_deviation[j, 0] = pts[i, j] - (w_th_sum[j] / w_sum)
                 sig_mat += (w[i] / w_sum) * np.dot(pts_deviation,
                                                    pts_deviation.T)  # Normalized by w_sum as per Betz et al
             sig_mat = cov_scale * cov_scale * sig_mat
 
+            mcmc_log_pdf_target = self._target_generator(self.evaluate_log_intermediate,
+                                                         self.evaluate_log_reference, temper_param)
+
             if self.verbose:
                 print('Begin Resampling')
             # Resampling and MH-MCMC step
-            for i in range(nsamples):
+            for i in range(self.nresample):
 
                 # Resampling from previous tempering level
                 lead_index = int(np.random.choice(pts_index, p=wp))
-                lead = pts_norm[lead_index]
+                lead = pts[lead_index]
 
                 # Defining the default proposal
                 if self.proposal_given_flag is False:
                     self.proposal = MVNormal(lead, cov=sig_mat)
 
                 # Single MH-MCMC step
-                mcmc_log_pdf_target = self._target_generator(self.evaluate_log_intermediate,
-                                                             self.evaluate_log_reference, temper_param)
                 x = MH(dimension=self.dimension, log_pdf_target=mcmc_log_pdf_target, seed=lead, nsamples=1,
                        nchains=1, nburn=self.nburn_resample, proposal=self.proposal,
                        proposal_is_symmetric=self.proposal_is_symmetric)
 
                 # Setting the generated sample in the array
-                pts_norm[i] = x.samples
-                for j in range(self.dimension):
-                    pts[i, j] = (pts_norm[i, j]*pts_std[j])+pts_mean[j]
+                pts[i] = x.samples
 
                 if self.recalc_w:
                     w[i] = np.exp(self.evaluate_log_intermediate(pts[i, :].reshape((1, -1)), temper_param)
@@ -559,7 +552,13 @@ class SequentialTemperingMCMC(TemperingMCMC):
                     wp[i] = w[i]/w_sum
 
             if self.verbose:
-                print('End Resampling')
+                print('Begin MCMC')
+            mcmc_seed = self._mcmc_seed_generator(resampled_pts=pts[0:self.nresample, :], arr_length=self.nresample,
+                                                  seed_length=self.nchains)
+            y = self.mcmc_class(log_pdf_target=mcmc_log_pdf_target, seed=mcmc_seed, dimension=self.dimension,
+                                nchains=self.nchains, nsamples_per_chain=self.nspc, nburn=self.nburn_mcmc,
+                                jump=self.jump_mcmc, concat_chains=True)
+            pts[self.nresample:, :] = y.samples
 
             if self.save_intermediate_samples is True:
                 self.intermediate_samples += [pts.copy()]
@@ -633,8 +632,7 @@ class SequentialTemperingMCMC(TemperingMCMC):
                 raise RuntimeError('UQpy: unable to find tempering exponent due to nonconvergence')
         return temper_param_trial
 
-    @staticmethod
-    def _preprocess_startup(seed_, prior_, nsamples, dimension):
+    def _preprocess_reference(self, dist_, args, seed_=None, nsamples=None, dimension=None):
         """
         Preprocess the target pdf inputs.
 
@@ -656,11 +654,14 @@ class SequentialTemperingMCMC(TemperingMCMC):
         * evaluate_log_pdf (callable): Callable that computes the log of the target density function (the prior)
         """
 
-        if prior_ is not None and seed_ is not None:
+        if dist_ is not None and seed_ is not None:
             raise ValueError('UQpy: both prior and seed values cannot be provided')
-        elif prior_ is not None:
-            evaluate_log_pdf = (lambda x: prior_.log_pdf(x))
-            seed_values = prior_.rvs(nsamples)
+        elif dist_ is not None:
+            if not(isinstance(dist_, Distribution)):
+                raise TypeError('UQpy: A UQpy.Distribution object must be provided.')
+            else:
+                evaluate_log_pdf = (lambda x: dist_.log_pdf(x))
+                seed_values = dist_.rvs(nsamples=nsamples)
         elif seed_ is not None:
             if seed_.shape[0] == nsamples and seed_.shape[1] == dimension:
                 seed_values = seed_
@@ -672,7 +673,26 @@ class SequentialTemperingMCMC(TemperingMCMC):
             raise ValueError('UQpy: either prior distribution or seed values must be provided')
         return evaluate_log_pdf, seed_values
 
+
     @staticmethod
-    def _target_generator(intermediate_logpdf_, prior_logpdf_, temper_param_):
-        evaluate_log_pdf = (lambda x: (prior_logpdf_(x) + intermediate_logpdf_(x, temper_param_)))
-        return evaluate_log_pdf
+    def _mcmc_seed_generator(resampled_pts, arr_length, seed_length):
+        """
+        Generates the seed from the resampled samples for the mcmc step
+
+        Utility function (static method), that returns a selection of the resampled points (at any tempering level) to
+        be used as the seed for the following mcmc exploration step.
+
+        **Inputs:**
+
+        * resampled_pts ('ndarray'): The resampled samples of the tempering level
+        * arr_length (int): Length of resampled_pts
+        * seed_length (int): Number of samples needed in the seed (same as nchains)
+
+        **Output/Returns:**
+
+        * evaluate_log_pdf (callable): Callable that computes the log of the target density function (the prior)
+        """
+        index_arr = np.arange(arr_length)
+        seed_indices = np.random.choice(index_arr, size=seed_length, replace=False)
+        mcmc_seed = resampled_pts[seed_indices, :]
+        return mcmc_seed
