@@ -28,7 +28,8 @@ The module currently contains the following classes:
 from UQpy.Sensitivity.Morris import Morris
 
 from UQpy.Sensitivity.Morris import *
+from UQpy.Sensitivity.Sobol import *
 
 from . import (
-    Morris
+    Morris, Sobol
 )

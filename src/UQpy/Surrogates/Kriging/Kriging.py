@@ -118,11 +118,12 @@ class Kriging:
         self.verbose = verbose
         self.random_state = random_state
         self.kwargs_optimizer = kwargs_optimizer
+        self.dimension = self.corr_model_params.shape[0]
 
         # Variables are used outside the __init__
         self.samples = None
         self.values = None
-        self.sample_mean, self.sample_std = None, None
+        self.sample_mean, self.sample_std = np.array([0]*self.dimension), np.array([1]*self.dimension)
         self.value_mean, self.value_std = None, None
         self.rmodel, self.cmodel = None, None
         self.beta, self.gamma, self.err_var = None, None, None
