@@ -3,11 +3,14 @@ import numpy as np
 from scipy.linalg import cholesky
 import scipy.stats as stats
 from beartype import beartype
+import inspect
+from scipy.optimize import minimize
 
 from UQpy.surrogates.baseclass.Surrogate import Surrogate
 from UQpy.utilities.ValidationTypes import RandomStateType
 from UQpy.surrogates.kriging.correlation_models.baseclass.Correlation import Correlation
 from UQpy.surrogates.kriging.regression_models.baseclass.Regression import Regression
+from UQpy.surrogates.kriging.constraints.baseclass.Constraints import Constraints
 
 
 class Kriging(Surrogate):
@@ -19,9 +22,10 @@ class Kriging(Surrogate):
         correlation_model_parameters: list,
         bounds=None,
         optimize: bool = True,
+        optimize_constraints: Constraints = None,
         optimizations_number: int = 1,
         normalize: bool = True,
-        optimizer=None,
+        optimizer='L-BFGS-B',
         random_state: RandomStateType = None,
         **kwargs_optimizer
     ):
@@ -45,6 +49,7 @@ class Kriging(Surrogate):
          point. Default: 1.
         :param normalize: Boolean flag used in case data normalization is required.
         :param optimizer: String of the :class:`scipy.stats` optimizer used during the Kriging surrogate.
+        Default: 'L-BFGS-B'.
         :param random_state: Random seed used to initialize the pseudo-random number generator. If an integer is
          provided, this sets the seed for an object of :class:`numpy.random.RandomState`. Otherwise, the
          object itself can be passed directly.
@@ -56,6 +61,7 @@ class Kriging(Surrogate):
         self.optimizer = optimizer
         self.optimizations_number = optimizations_number
         self.optimize = optimize
+        self.optimize_constraints = optimize_constraints
         self.normalize = normalize
         self.logger = logging.getLogger(__name__)
         self.random_state = random_state
@@ -93,15 +99,25 @@ class Kriging(Surrogate):
                 0
             ]
 
-        if self.optimizer is None:
-            from scipy.optimize import fmin_l_bfgs_b
+        # if self.optimizer is None:
+        #     from scipy.optimize import fmin_l_bfgs_b
+        #
+        #     self.optimizer = fmin_l_bfgs_b
+        #
+        # elif not callable(self.optimizer):
+        #     raise TypeError(
+        #         "UQpy: Input optimizer should be None (set to scipy.optimize.minimize) or a callable."
+        #     )
 
-            self.optimizer = fmin_l_bfgs_b
-            self.kwargs_optimizer = {"bounds": self.bounds}
-        elif not callable(self.optimizer):
-            raise TypeError(
-                "UQpy: Input optimizer should be None (set to scipy.optimize.minimize) or a callable."
-            )
+        self.kwargs_optimizer["method"] = self.optimizer
+
+        self.kwargs_optimizer["jac"] = False
+        if self.optimizer in ['CG', 'BFGS', 'Newton-CG', 'L-BFGS-B', 'TNC', 'SLSQP', 'dogleg', 'trust-ncg',
+                              'trust-krylov', 'trust-exact', 'trust-constr']:
+            self.kwargs_optimizer["jac"] = True
+
+        if self.optimizer in ['Nelder-Mead', 'L-BFGS-B', 'TNC', 'SLSQP', 'Powell', 'trust-constr']:
+            self.kwargs_optimizer["bounds"] = self.bounds
 
         if not isinstance(self.regression_model, Regression):
             raise NotImplementedError("UQpy: Doesn't recognize the Regression model.")
@@ -143,7 +159,6 @@ class Kriging(Surrogate):
         """
         self.logger.info("UQpy: Running kriging.fit")
 
-
         if optimizations_number is not None:
             self.optimizations_number = optimizations_number
         if correlation_model_parameters is not None:
@@ -171,16 +186,27 @@ class Kriging(Surrogate):
         # Maximum Likelihood Estimation : Solving optimization problem to calculate hyperparameters
         if self.optimize:
             starting_point = self.correlation_model_parameters
+            if self.optimize_constraints is not None:
+                if self.optimizer not in ['COBYLA', 'SLSQP', 'trust-constr']:
+                    import warnings
+                    warnings.warn("UQpy: Scipy optimize method doesn't support constraints. Thus ignoring constraints.")
+                else:
+                    cons = self.optimize_constraints.constraints(self.samples, self.values, self.predict)
+                    self.kwargs_optimizer['constraints'] = cons
+
             minimizer, fun_value = np.zeros([self.optimizations_number, input_dim]),\
                                    np.zeros([self.optimizations_number, 1])
+
+            print(self.kwargs_optimizer)
             for i__ in range(self.optimizations_number):
-                p_ = self.optimizer(
+                p_ = minimize(
                     Kriging.log_likelihood,
                     starting_point,
-                    args=(self.correlation_model, s_, self.F, y_),
+                    args=(self.correlation_model, s_, self.F, y_, self.kwargs_optimizer['jac']),
                     **self.kwargs_optimizer)
-                minimizer[i__, :] = p_[0]
-                fun_value[i__, 0] = p_[1]
+                print(self.kwargs_optimizer)
+                minimizer[i__, :] = p_.x
+                fun_value[i__, 0] = p_.fun
                 # Generating new starting points using log-uniform distribution
                 if i__ != self.optimizations_number - 1:
                     starting_point = stats.reciprocal.rvs([j[0] for j in self.bounds], [j[1] for j in self.bounds], 1,
@@ -194,9 +220,21 @@ class Kriging(Surrogate):
 
         # Updated Correlation matrix corresponding to MLE estimates of hyperparameters
         self.R = self.correlation_model.c(x=s_, s=s_, params=self.correlation_model_parameters)
+
+        self.beta, self.gamma, tmp = self._compute_additional_parameters(self.R)
+        self.C_inv, self.F_dash, self.G, self.err_var = tmp[1], tmp[3], tmp[2], tmp[5]
+
+        self.logger.info("UQpy: kriging fit complete.")
+
+    def _compute_additional_parameters(self, correlation_matrix):
+        if self.normalize:
+            y_ = (self.values - self.value_mean) / self.value_std
+        else:
+            y_ = self.values
         # Compute the regression coefficient (solving this linear equation: F * beta = Y)
         # Eq: 3.8, DACE
-        c = cholesky(self.R + (10 + nsamples) * 2 ** (-52) * np.eye(nsamples), lower=True, check_finite=False)
+        c = cholesky(correlation_matrix + (10 + self.samples.shape[0]) * 2 ** (-52) * np.eye(self.samples.shape[0]),
+                     lower=True, check_finite=False)
         c_inv = np.linalg.inv(c)
         f_dash = np.linalg.solve(c, self.F)
         y_dash = np.linalg.solve(c, y_)
@@ -205,21 +243,20 @@ class Kriging(Surrogate):
         if np.linalg.matrix_rank(g_) != min(np.size(self.F, 0), np.size(self.F, 1)):
             raise NotImplementedError("Chosen regression functions are not sufficiently linearly independent")
         # Design parameters (beta: regression coefficient)
-        self.beta = np.linalg.solve(g_, np.matmul(np.transpose(q_), y_dash))
+        beta = np.linalg.solve(g_, np.matmul(np.transpose(q_), y_dash))
 
         # Design parameter (R * gamma = Y - F * beta = residual)
-        self.gamma = np.linalg.solve(c.T, (y_dash - np.matmul(f_dash, self.beta)))
+        gamma = np.linalg.solve(c.T, (y_dash - np.matmul(f_dash, beta)))
 
         # Computing the process variance (Eq: 3.13, DACE)
-        self.err_var = np.zeros(output_dim)
-        for i in range(output_dim):
-            self.err_var[i] = (1 / nsamples) * (np.linalg.norm(y_dash[:, i] - np.matmul(f_dash, self.beta[:, i])) ** 2)
+        err_var = np.zeros(self.values.shape[1])
+        for i in range(self.values.shape[1]):
+            err_var[i] = (1 / self.samples.shape[0]) * (np.linalg.norm(y_dash[:, i] -
+                                                                       np.matmul(f_dash, beta[:, i])) ** 2)
 
-        self.F_dash, self.C_inv, self.G = f_dash, c_inv, g_
+        return beta, gamma, (c, c_inv, g_, f_dash, y_dash, err_var)
 
-        self.logger.info("UQpy: kriging fit complete.")
-
-    def predict(self, points, return_std: bool = False):
+    def predict(self, points, return_std: bool = False, correlation_model_parameters: list = None):
         """
         Predict the model response at new points.
 
@@ -228,6 +265,7 @@ class Kriging(Surrogate):
 
         :param points: Points at which to predict the model response.
         :param  return_std: Indicator to estimate standard deviation.
+        :param correlation_model_parameters: Hyperparameters for correlation model.
         :return: Predicted values at the new points, Standard deviation of predicted values at the new points
         """
         x_ = np.atleast_2d(points)
@@ -237,22 +275,31 @@ class Kriging(Surrogate):
         else:
             s_ = self.samples
         fx, jf = self.regression_model.r(x_)
+        if correlation_model_parameters is None:
+            correlation_model_parameters = self.correlation_model_parameters
         rx = self.correlation_model.c(
-            x=x_, s=s_, params=self.correlation_model_parameters
+            x=x_, s=s_, params=correlation_model_parameters
         )
-        y = np.einsum("ij,jk->ik", fx, self.beta) + np.einsum(
-            "ij,jk->ik", rx, self.gamma
+        if correlation_model_parameters is None:
+            beta, gamma = self.beta, self.gamma
+            c_inv, f_dash, g_, err_var = self.C_inv, self.F_dash, self.G, self.err_var
+        else:
+            beta, gamma, tmp = self._compute_additional_parameters(
+                self.correlation_model.c(x=s_, s=s_, params=correlation_model_parameters))
+            c_inv, f_dash, g_, err_var = tmp[1], tmp[3], tmp[2], tmp[5]
+        y = np.einsum("ij,jk->ik", fx, beta) + np.einsum(
+            "ij,jk->ik", rx, gamma
         )
         if self.normalize:
             y = self.value_mean + y * self.value_std
         if x_.shape[1] == 1:
             y = y.flatten()
         if return_std:
-            r_dash = np.matmul(self.C_inv, rx.T)
-            u = np.matmul(self.F_dash.T, r_dash) - fx.T
+            r_dash = np.matmul(c_inv, rx.T)
+            u = np.matmul(f_dash.T, r_dash) - fx.T
             norm1 = np.linalg.norm(r_dash, 2, 0)
-            norm2 = np.linalg.norm(np.linalg.solve(self.G, u), 2, 0)
-            mse = np.sqrt(self.err_var * np.atleast_2d(1 + norm2 - norm1).T)
+            norm2 = np.linalg.norm(np.linalg.solve(g_, u), 2, 0)
+            mse = np.sqrt(err_var * np.atleast_2d(1 + norm2 - norm1).T)
             if self.normalize:
                 mse = self.value_std * mse
             if x_.shape[1] == 1:
@@ -292,7 +339,7 @@ class Kriging(Surrogate):
         return y_grad
 
     @staticmethod
-    def log_likelihood(p0, cm, s, f, y):
+    def log_likelihood(p0, cm, s, f, y, return_grad):
         # Return the log-likelihood function and it's gradient. Gradient is calculate using Central Difference
         m = s.shape[0]
         n = s.shape[1]
@@ -358,5 +405,7 @@ class Kriging(Surrogate):
                     np.matmul(tmp1, cov_der)
                 )
 
-        return ll, grad_mle
-
+        if return_grad:
+            return ll, grad_mle
+        else:
+            return ll
