@@ -1,11 +1,9 @@
 import numpy as np
 
-from UQpy.inference.inference_models.optimization.MinimizeOptimizer import MinimizeOptimizer
-from UQpy.distributions.collection import Normal, JointCopula, JointIndependent
-from UQpy.distributions.copulas.Gumbel import Gumbel
+from UQpy.utilities.optimization.MinimizeOptimizer import MinimizeOptimizer
+from UQpy.distributions.collection import Normal
 from UQpy.inference.inference_models.DistributionModel import DistributionModel
 from UQpy.inference.inference_models.ComputationalModel import ComputationalModel
-from UQpy.sampling.ImportanceSampling import ImportanceSampling
 from UQpy.inference import MLE
 from UQpy.RunModel import RunModel
 import shutil

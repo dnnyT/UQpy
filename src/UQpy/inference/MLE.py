@@ -5,8 +5,8 @@ import numpy as np
 from beartype import beartype
 
 from UQpy.inference.inference_models.baseclass.InferenceModel import InferenceModel
-from UQpy.inference.inference_models.optimization.Optimizer import Optimizer
-from UQpy.inference.inference_models.optimization.MinimizeOptimizer import (
+from UQpy.utilities.optimization import Optimizer
+from UQpy.utilities.optimization.MinimizeOptimizer import (
     MinimizeOptimizer,
 )
 from UQpy.utilities.Utilities import process_random_state

@@ -1,3 +1,5 @@
+from line_profiler_pycharm import profile
+
 from UQpy.distributions import *
 from UQpy.surrogates import *
 import numpy as np

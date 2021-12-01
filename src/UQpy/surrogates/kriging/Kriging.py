@@ -6,11 +6,13 @@ from beartype import beartype
 import inspect
 from scipy.optimize import minimize
 
+from UQpy.utilities.Utilities import process_random_state
 from UQpy.surrogates.baseclass.Surrogate import Surrogate
 from UQpy.utilities.ValidationTypes import RandomStateType
 from UQpy.surrogates.kriging.correlation_models.baseclass.Correlation import Correlation
 from UQpy.surrogates.kriging.regression_models.baseclass.Regression import Regression
 from UQpy.surrogates.kriging.constraints.baseclass.Constraints import Constraints
+from UQpy.utilities.optimization.baseclass import Optimizer
 
 
 class Kriging(Surrogate):
@@ -20,12 +22,13 @@ class Kriging(Surrogate):
         regression_model: Regression,
         correlation_model: Correlation,
         correlation_model_parameters: list,
+        optimizer: Optimizer,
         bounds=None,
         optimize: bool = True,
         optimize_constraints: Constraints = None,
         optimizations_number: int = 1,
         normalize: bool = True,
-        optimizer='L-BFGS-B',
+        # optimizer='L-BFGS-B',
         random_state: RandomStateType = None,
         **kwargs_optimizer
     ):
@@ -84,20 +87,8 @@ class Kriging(Surrogate):
         self.G = None
         self.F, self.R = None, None
 
-        # Initialize and run preliminary error checks.
-        if self.regression_model is None:
-            raise NotImplementedError("UQpy: Regression model is not defined.")
-
-        if self.correlation_model is None:
-            raise NotImplementedError("Uqpy: Correlation model is not defined.")
-
-        if self.correlation_model_parameters is None:
-            raise NotImplementedError("UQpy: corr_model_params is not defined.")
-
-        if self.bounds is None:
-            self.bounds = [[0.001, 10 ** 7]] * self.correlation_model_parameters.shape[
-                0
-            ]
+        if optimizer.bounds is None:
+            optimizer.update_bounds([[0.001, 10 ** 7]] * self.correlation_model_parameters.shape[0])
 
         # if self.optimizer is None:
         #     from scipy.optimize import fmin_l_bfgs_b
@@ -108,29 +99,8 @@ class Kriging(Surrogate):
         #     raise TypeError(
         #         "UQpy: Input optimizer should be None (set to scipy.optimize.minimize) or a callable."
         #     )
-
-        self.kwargs_optimizer["method"] = self.optimizer
-
-        self.kwargs_optimizer["jac"] = False
-        if self.optimizer in ['CG', 'BFGS', 'Newton-CG', 'L-BFGS-B', 'TNC', 'SLSQP', 'dogleg', 'trust-ncg',
-                              'trust-krylov', 'trust-exact', 'trust-constr']:
-            self.kwargs_optimizer["jac"] = True
-
-        if self.optimizer in ['Nelder-Mead', 'L-BFGS-B', 'TNC', 'SLSQP', 'Powell', 'trust-constr']:
-            self.kwargs_optimizer["bounds"] = self.bounds
-
-        if not isinstance(self.regression_model, Regression):
-            raise NotImplementedError("UQpy: Doesn't recognize the Regression model.")
-
-        if not isinstance(self.correlation_model, Correlation):
-            raise NotImplementedError("UQpy: Doesn't recognize the Correlation model.")
-
-        if isinstance(self.random_state, int):
-            self.random_state = np.random.RandomState(self.random_state)
-        elif not isinstance(self.random_state, (type(None), np.random.RandomState)):
-            raise TypeError(
-                "UQpy: random_state must be None, an int or an np.random.RandomState object."
-            )
+        self.jac = optimizer.supports_jacobian()
+        self.random_state = process_random_state(random_state)
 
     def fit(
         self,
@@ -187,23 +157,17 @@ class Kriging(Surrogate):
         if self.optimize:
             starting_point = self.correlation_model_parameters
             if self.optimize_constraints is not None:
-                if self.optimizer not in ['COBYLA', 'SLSQP', 'trust-constr']:
-                    import warnings
-                    warnings.warn("UQpy: Scipy optimize method doesn't support constraints. Thus ignoring constraints.")
-                else:
-                    cons = self.optimize_constraints.constraints(self.samples, self.values, self.predict)
-                    self.kwargs_optimizer['constraints'] = cons
+                cons = self.optimize_constraints.constraints(self.samples, self.values, self.predict)
+                self.optimizer.apply_constraints(constraints=cons)
 
             minimizer, fun_value = np.zeros([self.optimizations_number, input_dim]),\
                                    np.zeros([self.optimizations_number, 1])
 
             print(self.kwargs_optimizer)
             for i__ in range(self.optimizations_number):
-                p_ = minimize(
-                    Kriging.log_likelihood,
-                    starting_point,
-                    args=(self.correlation_model, s_, self.F, y_, self.kwargs_optimizer['jac']),
-                    **self.kwargs_optimizer)
+                p_ = self.optimizer.optimize(function=Kriging.log_likelihood,
+                                             initial_guess=starting_point,
+                                             args=(self.correlation_model, s_, self.F, y_, self.jac))
                 print(self.kwargs_optimizer)
                 minimizer[i__, :] = p_.x
                 fun_value[i__, 0] = p_.fun

@@ -1,12 +1,12 @@
 import logging
 from typing import Union
 from beartype import beartype
-from UQpy.inference.inference_models.optimization.MinimizeOptimizer import (
+from UQpy.utilities.optimization.MinimizeOptimizer import (
     MinimizeOptimizer,
 )
 from UQpy.inference.inference_models.baseclass.InferenceModel import InferenceModel
 from UQpy.inference.MLE import MLE
-from UQpy.inference.inference_models.optimization.Optimizer import Optimizer
+from UQpy.utilities.optimization import Optimizer
 from UQpy.utilities.ValidationTypes import RandomStateType, PositiveInteger
 from UQpy.utilities.Utilities import process_random_state
 from UQpy.inference.InformationTheoreticCriterion import *
