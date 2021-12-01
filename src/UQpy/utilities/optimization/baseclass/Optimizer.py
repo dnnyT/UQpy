@@ -6,7 +6,7 @@ class Optimizer(ABC):
         self._bounds = bounds
 
     @abstractmethod
-    def optimize(self, function, initial_guess, args):
+    def optimize(self, function, initial_guess, args, jac):
         pass
 
     @abstractmethod

@@ -20,10 +20,10 @@ class MinimizeOptimizer(Optimizer):
         else:
             self.logger.warning("The selected optimizer method does not support bounds and thus will be ignored.")
 
-    def optimize(self, function, initial_guess, args=()):
+    def optimize(self, function, initial_guess, args=(), jac=False):
         return minimize(function, initial_guess, args=args,
                         method=self.method, bounds=self._bounds,
-                        constraints=self.constraints)
+                        constraints=self.constraints, jac=jac)
 
     def apply_constraints(self, constraints):
         if self.method in ['COBYLA', 'SLSQP', 'trust-constr']:

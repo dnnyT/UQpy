@@ -167,13 +167,15 @@ class Kriging(Surrogate):
             for i__ in range(self.optimizations_number):
                 p_ = self.optimizer.optimize(function=Kriging.log_likelihood,
                                              initial_guess=starting_point,
-                                             args=(self.correlation_model, s_, self.F, y_, self.jac))
+                                             args=(self.correlation_model, s_, self.F, y_, self.jac),
+                                             jac=self.jac)
                 print(self.kwargs_optimizer)
                 minimizer[i__, :] = p_.x
                 fun_value[i__, 0] = p_.fun
                 # Generating new starting points using log-uniform distribution
                 if i__ != self.optimizations_number - 1:
-                    starting_point = stats.reciprocal.rvs([j[0] for j in self.bounds], [j[1] for j in self.bounds], 1,
+                    starting_point = stats.reciprocal.rvs([j[0] for j in self.optimizer.bounds],
+                                                          [j[1] for j in self.optimizer.bounds], 1,
                                                           random_state=self.random_state)
 
             if min(fun_value) == np.inf:
