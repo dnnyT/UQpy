@@ -200,3 +200,33 @@ def test_loglikelihood_derivative():
                                                np.array([[1], [1]]), np.array([[1], [2]]), return_grad=True)[1], 3)
     expected_prediction = np.array([-0.235])
     assert (expected_prediction == prediction).all()
+
+def test_example():
+    from UQpy.surrogates import Kriging
+    from UQpy.utilities.strata import Rectangular
+    from UQpy.sampling import StratifiedSampling
+    from UQpy.RunModel import RunModel
+    from UQpy.distributions import Gamma
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    marginals = [Gamma(a=2., loc=1., scale=3.)]
+
+    strata = Rectangular(strata_number=[20])
+
+    x = StratifiedSampling(distributions=marginals, strata_object=strata,
+                           samples_per_stratum_number=1, random_state=2)
+
+    rmodel = RunModel(model_script='python_model_1Dfunction.py', delete_files=True)
+    rmodel.run(samples=x.samples)
+
+    from UQpy.surrogates.kriging.regression_models import Linear
+    from UQpy.surrogates.kriging.correlation_models import Gaussian
+    from UQpy.utilities.optimization.MinimizeOptimizer import MinimizeOptimizer
+
+    optimizer = MinimizeOptimizer(method="L-BFGS-B")
+    K = Kriging(regression_model=Linear(), correlation_model=Gaussian(), optimizer=optimizer,
+                optimizations_number=20, correlation_model_parameters=[1], random_state=2)
+    K.fit(samples=x.samples, values=rmodel.qoi_list)
+    print(K.correlation_model_parameters)
+

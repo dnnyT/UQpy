@@ -35,5 +35,5 @@ class MinimizeOptimizer(Optimizer):
         self.save_bounds(bounds)
 
     def supports_jacobian(self):
-        self.method in ['CG', 'BFGS', 'Newton-CG', 'L-BFGS-B', 'TNC', 'SLSQP', 'dogleg', 'trust-ncg',
-                        'trust-krylov', 'trust-exact', 'trust-constr']
+        return self.method in ['CG', 'BFGS', 'Newton-CG', 'L-BFGS-B', 'TNC', 'SLSQP', 'dogleg', 'trust-ncg',
+                               'trust-krylov', 'trust-exact', 'trust-constr']
