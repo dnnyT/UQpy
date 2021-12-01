@@ -1,16 +1,16 @@
-from line_profiler_pycharm import profile
+import pytest
 
-from UQpy.distributions import *
+from UQpy import JointIndependent
+from UQpy.distributions import Uniform
+from UQpy.sensitivity.PceSensitivity import PceSensitivity
 from UQpy.surrogates import *
 import numpy as np
-from UQpy.surrogates.polynomial_chaos.ChaosPolynomials import hermite_eval, legendre_eval
-from UQpy.surrogates.polynomial_chaos.MultiIndexSets import setsize, td_set_recursive
-from UQpy.surrogates.polynomial_chaos.SobolEstimation import pce_generalized_sobol_first, pce_generalized_sobol_total
+
+from UQpy.surrogates.polynomial_chaos.polynomials.PolynomialBasis import PolynomialBasis
 
 np.random.seed(1)
 max_degree, n_samples = 2, 10
 dist = Uniform(loc=0, scale=10)
-pce = PolyChaosExp(dist)
 
 def func(x):
     return x * np.sin(x) / 10
@@ -19,128 +19,133 @@ x = dist.rvs(n_samples)
 x_test = dist.rvs(n_samples)
 y = func(x)
 
-def poly_td_func(pce, max_degree):
-    construct_td_basis(pce, max_degree)
-    p = pce.poly_basis
-    return p
-
-def poly_tp_func(pce, max_degree):
-    construct_tp_basis(pce, max_degree)
-    p = pce.poly_basis
-    return p
-
-def pce_coeff_lstsq(pce, x, y):
-    fit_lstsq(pce, x, y)
-    return pce.coefficients
-
-def pce_coeff_lasso(pce, x, y):
-    fit_lasso(pce, x, y)
-    return pce.coefficients
-
-def pce_coeff_ridge(pce, x, y):
-    fit_ridge(pce, x, y)
-    return pce.coefficients
-
-def pce_predict(pce,x):
-    return pce.predict(x)
 
 # Unit tests
 def test_1():
     """
     Test td basis
     """
-    assert round(poly_td_func(pce, max_degree)[1].evaluate(x)[0], 4) == -0.2874
+    polynomials = PolynomialBasis.create_total_degree_basis(dist, max_degree).polynomials
+    value = polynomials[1].evaluate(x)[0]
+    assert round(value, 4) == -0.2874
 
 def test_2():
     """
     Test tp basis
     """
-    assert round(poly_tp_func(pce, max_degree)[1].evaluate(x)[0], 4) == -0.2874
+    polynomial_basis = PolynomialBasis.create_tensor_product_basis(dist, max_degree).polynomials
+    value = polynomial_basis[1].evaluate(x)[0]
+    assert round(value, 4) == -0.2874
 
 def test_3():
     """
     Test PCE coefficients w/ lasso
     """
-    assert round(pce_coeff_lasso(pce, x, y)[0][0], 4) == 0.0004
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    lasso = LassoRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=lasso)
+    pce.fit(x, y)
+    assert round(pce.coefficients[0][0], 4) == 0.0004
+#
 def test_4():
     """
     Test PCE coefficients w/ ridge
     """
-    assert round(pce_coeff_ridge(pce, x, y)[0][0], 4) == 0.0276
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    ridge = RidgeRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=ridge)
+    pce.fit(x, y)
+    assert round(pce.coefficients[0][0], 4) == 0.0276
+#
 def test_5():
     """
     Test PCE coefficients w/ lstsq
     """
-    assert round(pce_coeff_lstsq(pce, x, y)[0][0], 4) == 0.2175
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    assert round(pce.coefficients[0][0], 4) == 0.2175
+#
 def test_6():
     """
     Test PCE prediction
     """
-    y_test = pce_predict(pce, x_test)
-    assert round(y_test[0][0], 4) == -0.0794
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    y_test = pce.predict(x_test)
+    assert round(y_test[0][0], 4) == -0.1607
+#
 def test_7():
     """
     Test Sobol indices
     """
-    assert round(pce_sobol_first(pce)[0][0], 3) == 1.0
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    pce_sensitivity = PceSensitivity(pce)
+    first_order_sobol = pce_sensitivity.first_order_indices()
+    assert round(first_order_sobol[0][0], 3) == 1.0
+#
 def test_8():
     """
     Test Sobol indices
     """
-    assert round(pce_sobol_total(pce)[0][0], 3) == 1.0
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    pce_sensitivity = PceSensitivity(pce)
+    total_order_sobol = pce_sensitivity.total_order_indices()
+    assert round(total_order_sobol[0][0], 3) == 1.0
+#
 def test_9():
     """
     Test Sobol indices
     """
-    assert pce_generalized_sobol_first(pce) == None
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    pce_sensitivity = PceSensitivity(pce)
 
+#
 def test_10():
     """
     Test Sobol indices
     """
-    assert pce_generalized_sobol_total(pce) == None
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    pce_sensitivity = PceSensitivity(pce)
+    with pytest.raises(ValueError):
+        generalized_total_order_sobol = pce_sensitivity.generalized_total_order_indices()
+#
 def test_11():
     """
     PCE mean
     """
-    assert round(pce_mean(pce)[0], 3) == 0.299
-
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    mean, _ = pce.get_moments()
+    assert round(mean, 3) == 0.218
+#
 def test_12():
     """
     PCE variance
     """
-    assert round(pce_variance(pce)[0], 3) == 0.185
-
-def test_13():
-    """
-    Evaluation of Legendre polynomials
-    """
-    assert round(hermite_eval(x_test, 2, dist)[0], 4) == -0.5829
-
-def test_14():
-    """
-    Evaluation of Hermite polynomials
-    """
-    assert round(legendre_eval(x_test, 2, dist)[0], 4) == -1.0304
-
-def test_15():
-    """
-    set size
-    """
-    assert round(setsize(3, 2), 4) == 6
-
-def test_16():
-    """
-    td_set_recursive
-    """
-    assert round(td_set_recursive(2, 3, 4)[0][1], 4) == 3.0
+    polynomial_basis = PolynomialBasis.create_total_degree_basis(dist, max_degree)
+    least_squares = LeastSquareRegression(polynomial_basis)
+    pce = PolynomialChaosExpansion(regression_method=least_squares)
+    pce.fit(x, y)
+    _, variance = pce.get_moments()
+    assert round(variance, 3) == 0.185
 
 
 def function(x):
@@ -173,18 +178,24 @@ joint = JointIndependent(marginals=marg)
 n_samples_2 = 10
 x_2 = joint.rvs(n_samples_2)
 y_2 = function(x_2)
-pce_2 = PolyChaosExp(joint)
-construct_td_basis(pce_2, 2)
-fit_lstsq(pce_2, x_2, y_2)
+
+polynomial_basis = PolynomialBasis.create_total_degree_basis(joint, 2)
+least_squares = LeastSquareRegression(polynomial_basis)
+pce_2 = PolynomialChaosExpansion(regression_method=least_squares)
+pce_2.fit(x_2, y_2)
 
 def test_17():
     """
     Test Sobol indices for vector-valued quantity of interest on the random inputs
     """
-    assert round(pce_generalized_sobol_first(pce_2)[0], 4) == 0.1073
+    pce_sensitivity = PceSensitivity(pce_2)
+    generalized_first_sobol = pce_sensitivity.generalized_first_order_indices()
+    assert round(generalized_first_sobol[0], 4) == 0.1073
 
 def test_18():
     """
     Test Sobol indices for vector-valued quantity of interest on the random inputs
     """
-    assert round(pce_generalized_sobol_total(pce_2)[0], 4) == 0.1921
+    pce_sensitivity = PceSensitivity(pce_2)
+    generalized_total_sobol = pce_sensitivity.generalized_total_order_indices()
+    assert round(generalized_total_sobol[0], 4) == 0.1921
