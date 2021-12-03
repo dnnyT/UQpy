@@ -8,7 +8,10 @@ class Nonnegative(Constraints):
         self.z_value = z_value
 
     def constraints(self, x_train, y_train, predict_function):
-        cons = []
+        cons=[]
+        # cons = [{'type': 'ineq', 'fun': Nonnegative.constraints_candidate, 'args': (predict_function,
+        #                                                                              self.candidate_points,
+        #                                                                              self.z_value)}]
         # for i in range(y_train.shape[0]):
         #     cons.append({'type': 'ineq',
         #                  'fun': lambda theta: self.observed_error -
@@ -16,7 +19,6 @@ class Nonnegative(Constraints):
         #                      y_train[i])})
 
         for j in range(self.candidate_points.shape[0]):
-
             cons.append({'type': 'ineq', 'fun': self.constraints_candidate, 'args': (predict_function,
                                                                                      self.candidate_points[j, :],
                                                                                      self.z_value)})
@@ -26,4 +28,7 @@ class Nonnegative(Constraints):
     @staticmethod
     def constraints_candidate(theta_, pred, cand_points, z_):
         tmp_predict, tmp_error = pred(cand_points, True, correlation_model_parameters=theta_)
-        return tmp_predict - z_ * tmp_error
+        a = tmp_predict - z_ * tmp_error
+        # print(a>0)
+        # a = tmp_predict
+        return a[0]

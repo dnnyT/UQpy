@@ -12,10 +12,10 @@ class MinimizeOptimizer(Optimizer):
         self.optimization = minimize
         self.method = method
         self.save_bounds(bounds)
-        self.constraints = None
+        self.constraints = {}
 
     def save_bounds(self, bounds):
-        if self.method in ['Nelder-Mead', 'L-BFGS-B', 'TNC', 'SLSQP', 'Powell', 'trust-constr']:
+        if self.method.lower() in ['nelder-mead', 'l-bfgs-b', 'tnc', 'slsqp', 'powell', 'trust-constr']:
             self._bounds = bounds
         else:
             self.logger.warning("The selected optimizer method does not support bounds and thus will be ignored.")
@@ -23,10 +23,10 @@ class MinimizeOptimizer(Optimizer):
     def optimize(self, function, initial_guess, args=(), jac=False):
         return minimize(function, initial_guess, args=args,
                         method=self.method, bounds=self._bounds,
-                        constraints=self.constraints, jac=jac)
+                        constraints=self.constraints, jac=jac, options={'disp':True, 'maxiter': 10000, 'catol': 0.002})
 
     def apply_constraints(self, constraints):
-        if self.method in ['COBYLA', 'SLSQP', 'trust-constr']:
+        if self.method.lower() in ['cobyla', 'slsqp', 'trust-constr']:
             self.constraints = constraints
         else:
             self.logger.warning("The selected optimizer method does not support constraints and thus will be ignored.")
@@ -35,5 +35,5 @@ class MinimizeOptimizer(Optimizer):
         self.save_bounds(bounds)
 
     def supports_jacobian(self):
-        return self.method in ['CG', 'BFGS', 'Newton-CG', 'L-BFGS-B', 'TNC', 'SLSQP', 'dogleg', 'trust-ncg',
-                               'trust-krylov', 'trust-exact', 'trust-constr']
+        return self.method.lower() in ['cg', 'bfgs', 'newton-cg', 'l-bfgs-b', 'tnc', 'slsqp', 'dogleg', 'trust-ncg',
+                                        'trust-krylov', 'trust-exact', 'trust-constr']

@@ -28,9 +28,7 @@ class Kriging(Surrogate):
         optimize_constraints: Constraints = None,
         optimizations_number: int = 1,
         normalize: bool = True,
-        # optimizer='L-BFGS-B',
         random_state: RandomStateType = None,
-        **kwargs_optimizer
     ):
         """
         Κriging generates an Gaussian process regression-based surrogate model to predict the model output at new sample
@@ -68,7 +66,6 @@ class Kriging(Surrogate):
         self.normalize = normalize
         self.logger = logging.getLogger(__name__)
         self.random_state = random_state
-        self.kwargs_optimizer = kwargs_optimizer
 
         # Variables are used outside the __init__
         self.samples = None
@@ -159,17 +156,24 @@ class Kriging(Surrogate):
             if self.optimize_constraints is not None:
                 cons = self.optimize_constraints.constraints(self.samples, self.values, self.predict)
                 self.optimizer.apply_constraints(constraints=cons)
+                # def nonnegative(x):
+                #     return x
+                #
+                # cons = ({'type': 'ineq', 'fun': nonnegative})
+                self.optimizer.apply_constraints(constraints=cons)
 
             minimizer, fun_value = np.zeros([self.optimizations_number, input_dim]),\
                                    np.zeros([self.optimizations_number, 1])
 
-            print(self.kwargs_optimizer)
+            # print(self.kwargs_optimizer)
+
             for i__ in range(self.optimizations_number):
                 p_ = self.optimizer.optimize(function=Kriging.log_likelihood,
                                              initial_guess=starting_point,
                                              args=(self.correlation_model, s_, self.F, y_, self.jac),
                                              jac=self.jac)
-                print(self.kwargs_optimizer)
+                print(p_.success)
+                # print(self.kwargs_optimizer)
                 minimizer[i__, :] = p_.x
                 fun_value[i__, 0] = p_.fun
                 # Generating new starting points using log-uniform distribution
@@ -177,6 +181,7 @@ class Kriging(Surrogate):
                     starting_point = stats.reciprocal.rvs([j[0] for j in self.optimizer.bounds],
                                                           [j[1] for j in self.optimizer.bounds], 1,
                                                           random_state=self.random_state)
+                    print(starting_point)
 
             if min(fun_value) == np.inf:
                 raise NotImplementedError("Maximum likelihood estimator failed: Choose different starting point or "
@@ -341,18 +346,9 @@ class Kriging(Surrogate):
         ll = 0
         for out_dim in range(y.shape[1]):
             sigma_[out_dim] = (1 / m) * (
-                    np.linalg.norm(y__[:, out_dim] - np.matmul(f__, beta_[:, out_dim]))
-                    ** 2
-            )
+                    np.linalg.norm(y__[:, out_dim] - np.matmul(f__, beta_[:, out_dim])) ** 2)
             # Objective function:= log(det(sigma**2 * R)) + constant
-            ll = (
-                    ll
-                    + (
-                            np.log(np.linalg.det(sigma_[out_dim] * r__))
-                            + m * (np.log(2 * np.pi) + 1)
-                    )
-                    / 2
-            )
+            ll = (ll + ( np.log(np.linalg.det(sigma_[out_dim] * r__)) + m * (np.log(2 * np.pi) + 1)) / 2)
 
         # Gradient of loglikelihood
         # Reference: C. E. Rasmussen & C. K. I. Williams, Gaussian Processes for Machine Learning, the MIT Press,
