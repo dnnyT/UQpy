@@ -1,14 +1,13 @@
 import numpy as np
 from scipy.integrate import quad, dblquad
-from UQpy.Sensitivity.Sobol.sobol import Sobol
-from scipy.linalg import solve
-import time
+from UQpy.Sensitivity.Sobol.sobol_parallel import SobolParallel
 
 
-class SobolGPR(Sobol):
+
+class SobolGPR_einsum(SobolParallel):
     def __init__(self, surr_object=None, dist_object=None, samples=None, mcs_object=None, single_int=None,
                  double_int=None, n_randv=200, n_sim=1000, lower_bound=0.01, upper_bound=0.99,  random_state=None,
-                 transform_x=None, transform_y=None, **kwargs):
+                 transform_x=None, transform_y=None, num_cores=1, **kwargs):
 
         self.transform_x, self.transform_y = transform_x, transform_y
         self.sample_std = None
@@ -18,7 +17,8 @@ class SobolGPR(Sobol):
                          lower_bound=lower_bound,  upper_bound=upper_bound, random_state=random_state,
                          _transform_x=self._transform_x, _inverse_transform_x=self._inverse_transform_x,
                          _transform_y=self._transform_y, _inverse_transform_y=self._inverse_transform_y,
-                         compute_mean_vector=self.compute_mean_vector, compute_cov_matrix=self.compute_cov_matrix)
+                         compute_mean_vector=self.compute_mean_vector, compute_cov_matrix=self.compute_cov_matrix,
+                         num_cores=num_cores)
 
         if self.single_int is None:
             self.single_int = self._numerical_approx_single
@@ -39,15 +39,17 @@ class SobolGPR(Sobol):
 
         # 2. Compute second term
         k1_val = self.surr_object.kernel_.k1.constant_value
-        rx = np.zeros([self.samples.shape[0], scaled_sam.shape[0]])
+        # rx = np.zeros([self.samples.shape[0], scaled_sam.shape[0]])
         tmp = np.delete(self.single_int_corr_f, i_, 1)
-        for k_ in range(scaled_sam.shape[0]):
-            if isinstance(i_, list):
-                tmp1 = self.corr_model(scaled_sam[k_].reshape(1, -1), self.samples_t[:, i_], i_)[0, :]
-            else:
-                tmp1 = self.corr_model(scaled_sam[k_].reshape(-1, 1), self.samples_t[:, i_].reshape(-1, 1), i_)[0, :]
-            rx[:, k_] = np.prod(tmp, axis=1) * tmp1
-        mean_term2 = k1_val * np.matmul(rx.T, self.surr_object.alpha_)
+        # for k_ in range(scaled_sam.shape[0]):
+        #     if isinstance(i_, list):
+        #         tmp1 = self.corr_model(scaled_sam[k_].reshape(1, -1), self.samples_t[:, i_], i_)[0, :]
+        #     else:
+        #         tmp1 = self.corr_model(scaled_sam[k_].reshape(-1, 1), self.samples_t[:, i_].reshape(-1, 1), i_)[0, :]
+        #     rx[:, k_] = np.prod(tmp, axis=1) * tmp1
+
+        rx_mat = np.prod(tmp, axis=1) * self.corr_model(scaled_sam, self.samples_t[:, i_], i_)
+        mean_term2 = k1_val * np.matmul(rx_mat, self.surr_object.alpha_)
         return mean_term2
 
     def compute_cov_matrix(self, scaled_sam, i_):
@@ -59,27 +61,33 @@ class SobolGPR(Sobol):
         r_inv = cc_inv.T.dot(cc_inv)
         scaled_sam_ = np.zeros([scaled_sam.shape[0], self.dimension])
         scaled_sam_[:, i_] = scaled_sam.reshape(scaled_sam_[:, i_].shape)
-        if isinstance(i_, int):
-            n_col = 1
-        else:
-            n_col = len(i_)
-        n_row = self.samples_t.shape[0]
-        cov = np.zeros([self.n_randv, self.n_randv])
-        for p in range(self.n_randv):
-            for q in range(p, self.n_randv):
-                u = np.prod(tmp_db) * self.corr_model(scaled_sam[p].reshape(1, n_col), scaled_sam[q].reshape(1, n_col),
-                                                      i_)
-                tmp1 = np.delete(self.single_int_corr_f, i_, 1)
-                tp = np.atleast_2d(np.prod(tmp1, axis=1) * self.corr_model(scaled_sam[p].reshape(1, n_col),
-                                                                           self.samples_t[:, i_].reshape(n_row, n_col),
-                                                                           i_)).T
-                tq = np.atleast_2d(np.prod(tmp1, axis=1) * self.corr_model(scaled_sam[q].reshape(1, n_col),
-                                                                           self.samples_t[:, i_].reshape(n_row, n_col),
-                                                                           i_)).T
-                term2 = np.matmul(tp.T, np.matmul(r_inv, tq))
-                cov[p, q] = k1_val * (u - k1_val * term2)
-                cov[q, p] = cov[p, q]
-        return cov
+        # if isinstance(i_, int):
+        #     n_col = 1
+        # else:
+        #     n_col = len(i_)
+        # n_row = self.samples_t.shape[0]
+        # cov = np.zeros([self.n_randv, self.n_randv])
+
+        # tmp_p = []
+        tmp1 = np.delete(self.single_int_corr_f, i_, 1)
+        tmp_p_mat = np.prod(tmp1, axis=1) * self.corr_model(scaled_sam, self.samples_t[:, i_], i_)
+        # for p in range(self.n_randv):
+        #     tmp_p.append(np.atleast_2d(np.prod(tmp1, axis=1) * self.corr_model(scaled_sam[p].reshape(1, n_col),
+        #                                                                        self.samples_t[:, i_].reshape(n_row,
+        #                                                                                                      n_col),
+        #                                                                        i_)))
+
+        u_mat = self.corr_model(scaled_sam, scaled_sam, i_)
+        # for p in range(self.n_randv):
+        #     for q in range(p, self.n_randv):
+        #         u = np.prod(tmp_db) * u_mat[p, q]
+        #         tq = tmp_p[q].T
+        #         term2 = np.matmul(tmp_p[p], np.matmul(r_inv, tq))
+        #         cov[p, q] = k1_val * (u - k1_val * term2)
+        #         cov[q, p] = cov[p, q]
+
+        cov_mat = k1_val * (np.prod(tmp_db) * u_mat - k1_val * np.matmul(tmp_p_mat, np.matmul(r_inv, tmp_p_mat.T)))
+        return cov_mat
 
     def _transform_x(self, data, ind=None):
         """
@@ -205,8 +213,6 @@ class SobolGPR(Sobol):
         if samples is not None and isinstance(samples, np.ndarray):
             self.samples = samples
 
-        print('Number of training points: ', self.samples.shape[0])
-        print('Number of candidate points: ', self.n_randv)
         self.lower, self.upper = np.zeros([1, self.dimension]), np.zeros([1, self.dimension])
         for k_ in range(self.dimension):
             self.lower[0, k_] = self.dist_object[k_].icdf(self.lower_bound)
@@ -232,23 +238,20 @@ class SobolGPR(Sobol):
             sam_mean, sam_std = self.transform_x.mean_, self.transform_x.scale_
         # Single integration components of the correlation matrix
         self.single_int_corr_f = np.zeros_like(self.samples)
-        start_time = time.time()
+        # start_time = time.time()
         for k_ in range(self.dimension):
             for l_ in range(self.samples.shape[0]):
                 self.single_int_corr_f[l_, k_] = self.single_int(s_t=self.samples_t[l_, k_], d_=self.dist_object[k_],
                                                                  corr_model=self.corr_model, sam_std=sam_std,
                                                                  k__=k_, l_=self.lower[k_], u_=self.upper[k_],
                                                                  sam_mean=sam_mean, kg_=self.surr_object)
-        print("- Single integration is computed in {} sec".format(time.time()-start_time))
 
         # Double integration components of the correlation matrix
         self.double_int_corr_f = np.zeros(self.dimension)
-        start_time = time.time()
         for l_ in range(self.dimension):
             self.double_int_corr_f[l_] = self.double_int(d_=self.dist_object[l_], corr_model=self.corr_model,
                                                          sam_std=sam_std, k__=l_, l_=self.lower[l_], u_=self.upper[l_],
                                                          sam_mean=sam_mean, kg_=self.surr_object)
-        print("- Double integration is computed in {} sec".format(time.time() - start_time))
         self.framework()
 
         self.sample_std = sam_std

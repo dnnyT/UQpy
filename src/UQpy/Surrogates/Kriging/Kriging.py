@@ -284,6 +284,7 @@ class Kriging:
             for i__ in range(self.nopt):
                 p_ = self.optimizer(log_likelihood, starting_point, args=(self.corr_model, s_, self.F, y_),
                                     **self.kwargs_optimizer)
+                print(p_[2])
                 minimizer[i__, :] = p_[0]
                 fun_value[i__, 0] = p_[1]
                 # Generating new starting points using log-uniform distribution

@@ -6,9 +6,11 @@ from UQpy.SampleMethods import MCS, LHS
 from UQpy.Surrogates import Kriging
 from sklearn.gaussian_process import GaussianProcessRegressor
 import time
+from joblib import Parallel, delayed
+import multiprocessing
 
 
-class Sobol:
+class SobolParallel:
     """
     Parent class for computing first order Sobol Indices.
 
@@ -110,7 +112,7 @@ class Sobol:
     """
     def __init__(self, surr_object=None, dist_object=None, samples=None, mcs_object=None, single_int=None,
                  double_int=None, n_randv=200, n_sim=1000, lower_bound=0.01, upper_bound=0.99, random_state=None,
-                 **kwargs):
+                 num_cores=1, **kwargs):
         self.samples, self.samples_t = samples, None
         self.surr_object = surr_object
         self.dist_object = dist_object
@@ -131,6 +133,7 @@ class Sobol:
         self._transform_y, self._inverse_transform_y = kwargs['_transform_y'], kwargs['_inverse_transform_y']
         self.compute_mean_vector, self.compute_cov_matrix = kwargs['compute_mean_vector'], kwargs['compute_cov_matrix']
         self.kwargs = kwargs
+        self.num_cores = num_cores
         self.realizations, self.sobol_estimates = None, None
         self.total_var = None
 
@@ -168,43 +171,56 @@ class Sobol:
         self.discrete_samples = LHS(dist_object=self.dist_object, nsamples=self.n_randv).samples
         self.transformed_discrete_samples = self._transform_x(self.discrete_samples)
         self.realizations, self.sobol_estimates = [], np.zeros([self.n_sim, self.dimension])
-        start_time_loop = time.time()
+        # Define input argument for parallel function
+        parallel_input = []
         for i in range(self.dimension):
-            print("-------Dimension : {}--------".format(i+1))
-            # sort_index = np.argsort(self.transformed_discrete_samples[:, i])
-            # transformed_discrete_samples_i = self.transformed_discrete_samples[:, i].copy()[np.argsort(sort_index)]
-            transformed_discrete_samples_i = self.transformed_discrete_samples[:, i].copy()
+            parallel_input.append([i, self.transformed_discrete_samples, self.compute_mean_vector,
+                                   self.compute_cov_matrix])
+        start_time_loop = time.time()
+        # num_cores = multiprocessing.cpu_count()
+        print(self.num_cores)
+        results = Parallel(n_jobs=self.num_cores, verbose=10)(delayed(self._parallel_process)(*args) for args in
+                                                              parallel_input)
 
-            # ##Compute the mean of Gaussian process (A(X^i)=E[Y|X^i])
-            # Mean vector at learning/candidate input points
-            start_time_mean = time.time()
-            mean = self.compute_mean_vector(transformed_discrete_samples_i, i)
-            print("Mean vector at candidate points is computed in {} sec".format(time.time() - start_time_mean))
-
-            # ##Compute the covariance of Gaussian process (A(X^i)=E[Y|X^i])
-            start_time_cov = time.time()
-            cov = self.compute_cov_matrix(transformed_discrete_samples_i, i)
-            print("Cov matrix at candidate points is computed in {} sec".format(time.time() - start_time_cov))
-
-            self.cov_mat[i, :, :] = cov.copy()
-            self.mean_vec[:, i] = mean.reshape(-1, ).copy()
+        for i in range(self.dimension):
+            self.cov_mat[i, :, :] = results[i][1].copy()
+            self.mean_vec[:, i] = results[i][0].reshape(-1, ).copy()
             # self.cov_mat[i, :, :] = cov[np.argsort(sort_index), np.argsort(sort_index)]
             # self.mean_vec[:, i] = mean.reshape(-1, )[np.argsort(sort_index)]
 
-            transformed_realizations = self._generate_rv(cov, mean, self.n_sim)
+            transformed_realizations = self._generate_rv(results[i][1], results[i][0], self.n_sim)
             realizations = np.zeros_like(transformed_realizations)
             for ij_ in range(self.n_sim):
-                realizations[:, ij_] = self._inverse_transform_y(transformed_realizations[:, ij_]).reshape(-1,)
+                realizations[:, ij_] = self._inverse_transform_y(transformed_realizations[:, ij_]).reshape(-1, )
 
             self.realizations.append(realizations)
-            self.sobol_estimates[:, i] = np.var(realizations, axis=0)/self.total_var
+            self.sobol_estimates[:, i] = np.var(realizations, axis=0) / self.total_var
 
             self.sobol_mean.append(np.mean(self.sobol_estimates[:, i]))
             self.sobol_std.append(np.std(self.sobol_estimates[:, i]))
+
         print("- Loop over all the dimension is executed in {} sec".format(time.time() - start_time_loop))
 
         # print('(Total variance) MCS estimate: ', self.total_var)
         # print('Sobol Indices (using MCS estimate of variance): ', self.sobol_mean)
+
+    @staticmethod
+    def _parallel_process(i__, transformed_discrete_samples, compute_mean_vector, compute_cov_matrix):
+        # sort_index = np.argsort(self.transformed_discrete_samples[:, i])
+        # transformed_discrete_samples_i = self.transformed_discrete_samples[:, i].copy()[np.argsort(sort_index)]
+        transformed_discrete_samples_i = transformed_discrete_samples[:, i__].copy()
+
+        # ##Compute the mean of Gaussian process (A(X^i)=E[Y|X^i])
+        # Mean vector at learning/candidate input points
+        start_time_mean = time.time()
+        mean = compute_mean_vector(transformed_discrete_samples_i, i__)
+        print("Mean vector at candidate points is computed in {} sec".format(time.time() - start_time_mean))
+
+        # ##Compute the covariance of Gaussian process (A(X^i)=E[Y|X^i])
+        start_time_cov = time.time()
+        cov = compute_cov_matrix(transformed_discrete_samples_i, i__)
+        print("Cov matrix at candidate points is computed in {} sec".format(time.time() - start_time_cov))
+        return mean, cov
 
     def _generate_rv(self, cov_matrix, mean_vector, nsamples):
         e_val, e_vec = np.linalg.eigh(cov_matrix)
