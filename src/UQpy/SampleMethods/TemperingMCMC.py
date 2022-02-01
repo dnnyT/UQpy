@@ -361,14 +361,23 @@ class ParallelTemperingMCMC(TemperingMCMC):
             log_pdf_averages.append(np.mean(potential_values))
 
         # use quadrature to integrate between 0 and 1
-        from scipy.integrate import simps
-        int_value = simps(x=self.betas, y=np.array(log_pdf_averages))
+        from scipy.integrate import simps, trapz
+        betas_for_integration = np.copy(np.array(self.betas))
+        log_pdf_averages = np.array(log_pdf_averages)
+        #if self.betas[-1] != 1.:
+            #log_pdf_averages = np.append(log_pdf_averages, log_pdf_averages[-1])
+            #slope_linear = (log_pdf_averages[-1]-log_pdf_averages[-2]) / (
+            #        betas_for_integration[-1] - betas_for_integration[-2])
+            #log_pdf_averages = np.append(
+            #    log_pdf_averages, log_pdf_averages[-1] + (1. - betas_for_integration[-1]) * slope_linear)
+            #betas_for_integration = np.append(betas_for_integration, 1.)
+        int_value = trapz(x=betas_for_integration, y=log_pdf_averages)
         if log_p0 is None:
             if samples_p0 is None:
                 raise ValueError('UQpy: log_p0 or samples_p0 should be provided.')
             log_p0 = np.log(np.mean(np.exp(self.evaluate_log_intermediate(x=samples_p0, beta=self.betas[0]))))
 
         self.ti_results = {
-            'log_p0': log_p0, 'betas': self.betas, 'expect_potentials': np.array(log_pdf_averages)}
+            'log_p0': log_p0, 'betas': betas_for_integration, 'expect_potentials': log_pdf_averages}
 
         return int_value + log_p0
