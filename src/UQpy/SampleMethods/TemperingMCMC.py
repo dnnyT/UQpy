@@ -1,5 +1,7 @@
 import numpy as np
 import scipy.stats as stats
+from scipy.special import logsumexp
+from scipy.integrate import simps, trapz
 from UQpy.Distributions import *
 from UQpy.SampleMethods.MCMC import *
 from abc import ABC
@@ -34,11 +36,10 @@ class TemperingMCMC(ABC):
         self.verbose = verbose
 
         # Initialize the prior and likelihood
-        print(type(log_pdf_intermediate))
-        print(type(pdf_intermediate))
-        print(type(args_pdf_intermediate))
         self.evaluate_log_intermediate = self._preprocess_intermediate(
             log_pdf_=log_pdf_intermediate, pdf_=pdf_intermediate, args=args_pdf_intermediate)
+        if not (isinstance(distribution_reference, Distribution) or (distribution_reference is None)):
+            raise TypeError('UQpy: if provided, input distribution_reference should be a UQpy.Distribution object.')
         # self.evaluate_log_reference = self._preprocess_reference(dist_=distribution_reference, args=())
 
         # Initialize the outputs
@@ -50,7 +51,7 @@ class TemperingMCMC(ABC):
         """ Run the tempering MCMC algorithms to generate nsamples from the target posterior """
         pass
 
-    def evaluate_normalization_constant(self, compute_potential, log_p0=None, samples_p0=None):
+    def evaluate_normalization_constant(self, **kwargs):
         """ Computes the normalization constant :math:`Z_{1}=\int{q_{1}(x) p_{0}(x)dx}` where p0 is the reference pdf
          and q1 is the intermediate density with :math:`\beta=1`, thus q1 p0 is the target pdf."""
         pass
@@ -164,13 +165,15 @@ class ParallelTemperingMCMC(TemperingMCMC):
     """
 
     def __init__(self, niter_between_sweeps, pdf_intermediate=None, log_pdf_intermediate=None, args_pdf_intermediate=(),
-                 log_pdf_reference=None, pdf_reference=None, nburn=0, jump=1, dimension=None, seed=None,
+                 distribution_reference=None, nburn=0, jump=1, dimension=None, seed=None,
                  save_log_pdf=False, nsamples=None, nsamples_per_chain=None, nchains=None, verbose=False,
                  random_state=None, betas=None, nbetas=None, mcmc_class=MH, **kwargs_mcmc):
 
         super().__init__(pdf_intermediate=pdf_intermediate, log_pdf_intermediate=log_pdf_intermediate,
                          args_pdf_intermediate=args_pdf_intermediate, distribution_reference=None, dimension=dimension,
                          save_log_pdf=save_log_pdf, verbose=verbose, random_state=random_state)
+        self.distribution_reference = distribution_reference
+        self.evaluate_log_reference = distribution_reference.log_pdf
 
         # Initialize PT specific inputs: niter_between_sweeps and temperatures
         self.niter_between_sweeps = niter_between_sweeps
@@ -208,7 +211,7 @@ class ParallelTemperingMCMC(TemperingMCMC):
                            'proposal': [JointInd([Normal(scale=1./np.sqrt(beta))] * dimension) for beta in self.betas]}
 
         # Initialize algorithm specific inputs: target pdfs
-        self.ti_results = None
+        self.thermodynamic_integration_results = None
 
         #list_of_targets = list(map(lambda beta: lambda x: self._preprocess_target(
         #    log_pdf_=log_factor_tempered, pdf_=factor_tempered, args=(temp,) + args_factor_tempered)[0](x) +
@@ -316,11 +319,12 @@ class ParallelTemperingMCMC(TemperingMCMC):
                 mcmc_sampler._concatenate_chains()
 
         # Samples connect to posterior samples, i.e. the chain with beta=1.
+        self.intermediate_samples = [sampler.samples for sampler in self.mcmc_samplers]
         self.samples = self.mcmc_samplers[-1].samples
         if self.save_log_pdf:
             self.log_pdf_values = self.mcmc_samplers[-1].log_pdf_values
 
-    def evaluate_normalization_constant(self, compute_potential, log_p0=None, samples_p0=None):
+    def evaluate_normalization_constant(self, compute_potential, log_Z0=None, nsamples_from_p0=None):
         """
         Evaluate new log free energy as
 
@@ -336,16 +340,18 @@ class ParallelTemperingMCMC(TemperingMCMC):
             :math:`U_{\beta}(x)`. `log_factor_tempered_values` are the values saved during sampling of
             :math:`\log{p_{\beta}(x)}` at saved samples x.
 
-        * **log_p0** (`float`):
+        * **log_Z0** (`float`):
             Value of :math:`\log{Z_{0}}`
 
-        * **samples_p0** (`int`):
+        * **nsamples_from_p0** (`int`):
             N samples from the reference distribution p0. Then :math:`\log{Z_{0}}` is evaluate via MC sampling
-            as :math:`\frac{1}{N} \sum{p_{\beta=0}(x)}`. Used only if input *log_p0* is not provided.
+            as :math:`\frac{1}{N} \sum{p_{\beta=0}(x)}`. Used only if input *log_Z0* is not provided.
 
         """
         if not self.save_log_pdf:
             raise NotImplementedError('UQpy: the evidence cannot be computed when save_log_pdf is set to False.')
+        if log_Z0 is None and nsamples_from_p0 is None:
+            raise ValueError('UQpy: input log_Z0 or nsamples_from_p0 should be provided.')
         # compute average of log_target for the target at various temperatures
         log_pdf_averages = []
         for i, (beta, sampler) in enumerate(zip(self.betas, self.mcmc_samplers)):
@@ -355,7 +361,6 @@ class ParallelTemperingMCMC(TemperingMCMC):
             log_pdf_averages.append(np.mean(potential_values))
 
         # use quadrature to integrate between 0 and 1
-        from scipy.integrate import simps, trapz
         betas_for_integration = np.copy(np.array(self.betas))
         log_pdf_averages = np.array(log_pdf_averages)
         #if self.betas[-1] != 1.:
@@ -366,15 +371,15 @@ class ParallelTemperingMCMC(TemperingMCMC):
             #    log_pdf_averages, log_pdf_averages[-1] + (1. - betas_for_integration[-1]) * slope_linear)
             #betas_for_integration = np.append(betas_for_integration, 1.)
         int_value = trapz(x=betas_for_integration, y=log_pdf_averages)
-        if log_p0 is None:
-            if samples_p0 is None:
-                raise ValueError('UQpy: log_p0 or samples_p0 should be provided.')
-            log_p0 = np.log(np.mean(np.exp(self.evaluate_log_intermediate(x=samples_p0, beta=self.betas[0]))))
+        if log_Z0 is None:
+            samples_p0 = self.distribution_reference.rvs(nsamples=nsamples_from_p0)
+            log_Z0 = np.log(1./nsamples_from_p0) + logsumexp(
+                self.evaluate_log_intermediate(x=samples_p0, beta=self.betas[0]))
 
-        self.ti_results = {
-            'log_p0': log_p0, 'betas': betas_for_integration, 'expect_potentials': log_pdf_averages}
+        self.thermodynamic_integration_results = {
+            'log_Z0': log_Z0, 'betas': betas_for_integration, 'expect_potentials': log_pdf_averages}
 
-        return int_value + log_p0
+        return np.exp(int_value + log_Z0)
 
 
 class SequentialTemperingMCMC(TemperingMCMC):
