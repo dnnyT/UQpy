@@ -44,6 +44,7 @@ class TemperingMCMC(ABC):
 
         # Initialize the outputs
         self.samples = None
+        self.intermediate_samples = None
         if self.save_log_pdf:
             self.log_pdf_values = None
 
@@ -56,7 +57,7 @@ class TemperingMCMC(ABC):
          and q1 is the intermediate density with :math:`\beta=1`, thus q1 p0 is the target pdf."""
         pass
 
-    def _preprocess_reference(self, dist_, args, seed_=None, nsamples=None, dimension=None):
+    def _preprocess_reference(self, dist_, **kwargs):
         """
         Preprocess the target pdf inputs.
 
@@ -66,11 +67,7 @@ class TemperingMCMC(ABC):
 
         **Inputs:**
 
-        * log_pdf_ (callable): Log of the target density function from which to draw random samples. Either
-          pdf_target or log_pdf_target must be provided.
-        * pdf_ (callable): Target density function from which to draw random samples. Either pdf_target or
-          log_pdf_target must be provided.
-        * args (tuple): Positional arguments of the pdf target.
+        * dist_ (distribution object)
 
         **Output/Returns:**
 
@@ -80,7 +77,7 @@ class TemperingMCMC(ABC):
         # log_pdf is provided
         if dist_ is not None:
             if isinstance(dist_, Distribution):
-                evaluate_log_pdf = (lambda x: dist_.log_pdf(x, *args))
+                evaluate_log_pdf = (lambda x: dist_.log_pdf(x))
             else:
                 raise TypeError('UQpy: A UQpy.Distribution object must be provided.')
         else:
@@ -114,7 +111,7 @@ class TemperingMCMC(ABC):
             if callable(log_pdf_):
                 if args is None:
                     args = ()
-                evaluate_log_pdf = (lambda x, beta: log_pdf_(x, beta, *args))
+                evaluate_log_pdf = (lambda x, temper_param: log_pdf_(x, temper_param, *args))
             else:
                 raise TypeError('UQpy: log_pdf_intermediate must be a callable')
         # pdf is provided
@@ -122,8 +119,8 @@ class TemperingMCMC(ABC):
             if callable(pdf_):
                 if args is None:
                     args = ()
-                evaluate_log_pdf = (lambda x, beta: np.log(
-                    np.maximum(pdf_(x, beta, *args), 10 ** (-320) * np.ones((x.shape[0],)))))
+                evaluate_log_pdf = (lambda x, temper_param: np.log(
+                    np.maximum(pdf_(x, temper_param, *args), 10 ** (-320) * np.ones((x.shape[0],)))))
             else:
                 raise TypeError('UQpy: pdf_intermediate must be a callable')
         else:
@@ -167,39 +164,40 @@ class ParallelTemperingMCMC(TemperingMCMC):
     def __init__(self, niter_between_sweeps, pdf_intermediate=None, log_pdf_intermediate=None, args_pdf_intermediate=(),
                  distribution_reference=None, nburn=0, jump=1, dimension=None, seed=None,
                  save_log_pdf=False, nsamples=None, nsamples_per_chain=None, nchains=None, verbose=False,
-                 random_state=None, betas=None, nbetas=None, mcmc_class=MH, **kwargs_mcmc):
+                 random_state=None, temper_param_list=None, n_temper_params=None, mcmc_class=MH, **kwargs_mcmc):
 
         super().__init__(pdf_intermediate=pdf_intermediate, log_pdf_intermediate=log_pdf_intermediate,
                          args_pdf_intermediate=args_pdf_intermediate, distribution_reference=None, dimension=dimension,
                          save_log_pdf=save_log_pdf, verbose=verbose, random_state=random_state)
         self.distribution_reference = distribution_reference
-        self.evaluate_log_reference = distribution_reference.log_pdf
+        self.evaluate_log_reference = self._preprocess_reference(self.distribution_reference)
 
         # Initialize PT specific inputs: niter_between_sweeps and temperatures
         self.niter_between_sweeps = niter_between_sweeps
         if not (isinstance(self.niter_between_sweeps, int) and self.niter_between_sweeps >= 1):
             raise ValueError('UQpy: input niter_between_sweeps should be a strictly positive integer.')
-        self.betas = betas
-        self.nbetas = nbetas
-        if self.betas is None:
-            if self.nbetas is None:
-                raise ValueError('UQpy: either input betas or nbetas should be provided.')
-            elif not (isinstance(self.nbetas, int) and self.nbetas >= 2):
-                raise ValueError('UQpy: input nbetas should be a integer >= 2.')
+        self.temper_param_list = temper_param_list
+        self.n_temper_params = n_temper_params
+        if self.temper_param_list is None:
+            if self.n_temper_params is None:
+                raise ValueError('UQpy: either input temper_param_list or n_temper_params should be provided.')
+            elif not (isinstance(self.n_temper_params, int) and self.n_temper_params >= 2):
+                raise ValueError('UQpy: input n_temper_params should be a integer >= 2.')
             else:
-                self.betas = [1. / np.sqrt(2) ** i for i in range(self.nbetas-1, -1, -1)]
-        elif (not isinstance(self.betas, (list, tuple))
-              or not (all(isinstance(t, (int, float)) and (t > 0 and t <= 1.) for t in self.betas))
+                self.temper_param_list = [1. / np.sqrt(2) ** i for i in range(self.n_temper_params-1, -1, -1)]
+        elif (not isinstance(self.temper_param_list, (list, tuple))
+              or not (all(isinstance(t, (int, float)) and (t > 0 and t <= 1.) for t in self.temper_param_list))
               #or float(self.temperatures[0]) != 1.
         ):
-            raise ValueError('UQpy: betas should be a list of floats in [0, 1], starting at 0. and increasing to 1.')
+            raise ValueError(
+                'UQpy: temper_param_list should be a list of floats in [0, 1], starting at 0. and increasing to 1.')
         else:
-            self.nbetas = len(self.betas)
+            self.n_temper_params = len(self.temper_param_list)
 
         # Initialize mcmc objects, need as many as number of temperatures
         if not issubclass(mcmc_class, MCMC):
             raise ValueError('UQpy: mcmc_class should be a subclass of MCMC.')
-        if not all((isinstance(val, (list, tuple)) and len(val) == self.nbetas)
+        if not all((isinstance(val, (list, tuple)) and len(val) == self.n_temper_params)
                    for val in kwargs_mcmc.values()):
             raise ValueError(
                 'UQpy: additional kwargs arguments should be mcmc algorithm specific inputs, given as lists of length '
@@ -207,22 +205,21 @@ class ParallelTemperingMCMC(TemperingMCMC):
         # default value
         if isinstance(mcmc_class, MH) and len(kwargs_mcmc) == 0:
             from UQpy.Distributions import JointInd, Normal
-            kwargs_mcmc = {'proposal_is_symmetric': [True, ] * self.nbetas,
-                           'proposal': [JointInd([Normal(scale=1./np.sqrt(beta))] * dimension) for beta in self.betas]}
+            kwargs_mcmc = {'proposal_is_symmetric': [True, ] * self.n_temper_params,
+                           'proposal': [JointInd([Normal(scale=1./np.sqrt(temper_param))] * dimension)
+                                        for temper_param in self.temper_param_list]}
 
         # Initialize algorithm specific inputs: target pdfs
         self.thermodynamic_integration_results = None
 
-        #list_of_targets = list(map(lambda beta: lambda x: self._preprocess_target(
-        #    log_pdf_=log_factor_tempered, pdf_=factor_tempered, args=(temp,) + args_factor_tempered)[0](x) +
-        #                                                           self.evaluate_log_reference(x),
-        #                                    self.temperatures))
-
         self.mcmc_samplers = []
-        for i, beta in enumerate(self.betas):
+        for i, temper_param in enumerate(self.temper_param_list):
+            #log_pdf_target = self._target_generator(
+            #    self.evaluate_log_intermediate, self.evaluate_log_reference, temper_param)
+            log_pdf_target = (lambda x, temper_param=temper_param: self.evaluate_log_reference(
+                x) + self.evaluate_log_intermediate(x, temper_param))
             self.mcmc_samplers.append(
-                mcmc_class(log_pdf_target=
-                           lambda x, beta=beta: self.evaluate_log_reference(x) + self.evaluate_log_intermediate(x, beta),
+                mcmc_class(log_pdf_target=log_pdf_target,
                            dimension=dimension, seed=seed, nburn=nburn, jump=jump, save_log_pdf=save_log_pdf,
                            concat_chains=True, verbose=verbose, random_state=self.random_state, nchains=nchains,
                             **dict([(key, val[i]) for key, val in kwargs_mcmc.items()])))
@@ -287,7 +284,7 @@ class ParallelTemperingMCMC(TemperingMCMC):
 
             # Do sweeps if necessary
             if self.mcmc_samplers[-1].niterations % self.niter_between_sweeps == 0:
-                for i in range(self.nbetas - 1):
+                for i in range(self.n_temper_params - 1):
                     log_accept = (self.mcmc_samplers[i].evaluate_log_target(new_state[i + 1]) +
                                   self.mcmc_samplers[i + 1].evaluate_log_target(new_state[i]) -
                                   self.mcmc_samplers[i].evaluate_log_target(new_state[i]) -
@@ -354,30 +351,31 @@ class ParallelTemperingMCMC(TemperingMCMC):
             raise ValueError('UQpy: input log_Z0 or nsamples_from_p0 should be provided.')
         # compute average of log_target for the target at various temperatures
         log_pdf_averages = []
-        for i, (beta, sampler) in enumerate(zip(self.betas, self.mcmc_samplers)):
+        for i, (temper_param, sampler) in enumerate(zip(self.temper_param_list, self.mcmc_samplers)):
             log_factor_values = sampler.log_pdf_values - self.evaluate_log_reference(sampler.samples)
             potential_values = compute_potential(
-                x=sampler.samples, beta=beta, log_intermediate_values=log_factor_values)
+                x=sampler.samples, temper_param=temper_param, log_intermediate_values=log_factor_values)
             log_pdf_averages.append(np.mean(potential_values))
 
         # use quadrature to integrate between 0 and 1
-        betas_for_integration = np.copy(np.array(self.betas))
+        temper_param_list_for_integration = np.copy(np.array(self.temper_param_list))
         log_pdf_averages = np.array(log_pdf_averages)
-        #if self.betas[-1] != 1.:
+        #if self.temper_param_list[-1] != 1.:
             #log_pdf_averages = np.append(log_pdf_averages, log_pdf_averages[-1])
             #slope_linear = (log_pdf_averages[-1]-log_pdf_averages[-2]) / (
             #        betas_for_integration[-1] - betas_for_integration[-2])
             #log_pdf_averages = np.append(
             #    log_pdf_averages, log_pdf_averages[-1] + (1. - betas_for_integration[-1]) * slope_linear)
             #betas_for_integration = np.append(betas_for_integration, 1.)
-        int_value = trapz(x=betas_for_integration, y=log_pdf_averages)
+        int_value = trapz(x=temper_param_list_for_integration, y=log_pdf_averages)
         if log_Z0 is None:
             samples_p0 = self.distribution_reference.rvs(nsamples=nsamples_from_p0)
             log_Z0 = np.log(1./nsamples_from_p0) + logsumexp(
-                self.evaluate_log_intermediate(x=samples_p0, beta=self.betas[0]))
+                self.evaluate_log_intermediate(x=samples_p0, temper_param=self.temper_param_list[0]))
 
         self.thermodynamic_integration_results = {
-            'log_Z0': log_Z0, 'betas': betas_for_integration, 'expect_potentials': log_pdf_averages}
+            'log_Z0': log_Z0, 'temper_param_list': temper_param_list_for_integration,
+            'expect_potentials': log_pdf_averages}
 
         return np.exp(int_value + log_Z0)
 
@@ -457,10 +455,9 @@ class SequentialTemperingMCMC(TemperingMCMC):
             self.proposal_given_flag = True
 
         # Initialize attributes
+        self.temper_param_list = None
         self.evidence = None
         self.evidence_cov = None
-        self.temper_param_list = None
-        self.intermediate_samples = None
 
         # Call the run function
         if nsamples is not None:
@@ -584,6 +581,9 @@ class SequentialTemperingMCMC(TemperingMCMC):
         self.samples = pts
         self.evidence = S
 
+    def evaluate_normalization_constant(self):
+        return self.evidence
+
     @staticmethod
     def _find_temper_param(temper_param_prev, samples, q_func, n, iter_lim=1000, iter_thresh=0.00001):
         """
@@ -646,7 +646,7 @@ class SequentialTemperingMCMC(TemperingMCMC):
                 raise RuntimeError('UQpy: unable to find tempering exponent due to nonconvergence')
         return temper_param_trial
 
-    def _preprocess_reference(self, dist_, args, seed_=None, nsamples=None, dimension=None):
+    def _preprocess_reference(self, dist_, seed_=None, nsamples=None, dimension=None):
         """
         Preprocess the target pdf inputs.
 
