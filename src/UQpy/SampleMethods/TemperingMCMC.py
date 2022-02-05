@@ -440,7 +440,7 @@ class SequentialTemperingMCMC(TemperingMCMC):
             raise TypeError('UQpy: random_state must be None, an int or an np.random.RandomState object.')
 
         # Initialize input distributions
-        self.evaluate_log_reference, self.seed = self._preprocess_reference(dist_=distribution_reference, args=(),
+        self.evaluate_log_reference, self.seed = self._preprocess_reference(dist_=distribution_reference,
                                                                             seed_=seed, nsamples=nsamples,
                                                                             dimension=self.dimension)
 
