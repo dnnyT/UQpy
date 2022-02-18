@@ -4,13 +4,14 @@ import numpy as np
 from beartype import beartype
 
 from UQpy.dimension_reduction.distances.baseclass import RiemannianDistance
-from UQpy.dimension_reduction.grassmann_manifold.optimization.baseclass.OptimizationMethod import OptimizationMethod
+from UQpy.optimization.baseclass.OptimizationMethod import OptimizationMethod
 from UQpy.dimension_reduction.grassmann_manifold.GrassmannPoint import GrassmannPoint, ListOfGrassmannPoints
 from UQpy.dimension_reduction.grassmann_manifold.projections.baseclass.ManifoldProjection import ManifoldProjection
 from UQpy.utilities.ValidationTypes import Numpy2DFloatArray
 
 
 class Grassmann:
+    @beartype
     def __init__(self, manifold_projected_points: ManifoldProjection):
         """
 
@@ -22,6 +23,7 @@ class Grassmann:
     def evaluate_kernel_matrix(self, kernel):
         kernel_matrix = self.manifold_projected_points.evaluate_matrix(kernel)
         return kernel_matrix
+    
 
     @staticmethod
     @beartype
@@ -151,7 +153,6 @@ class Grassmann:
         :param manifold_points: Point(s) on the Grassmann manifold.
         :param optimization_method: The optimization method.
         :param distance: Distance metric to be used for the optimization.
-        :return:
         """
         # Compute and test the number of input matrices necessary to compute the Karcher mean.
         nargs = len(manifold_points)

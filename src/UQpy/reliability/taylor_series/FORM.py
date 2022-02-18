@@ -41,17 +41,17 @@ class FORM(TaylorSeries):
          Either `seed_u` or `seed_x` must be provided.
          If `seed_u` is provided, it should be a point in the uncorrelated standard normal space of **U**.
          If `seed_x` is provided, it should be a point in the parameter space of **X**.
-         Default: `seed_u = (0, 0, ..., 0)`
-        :param df_step: Finite difference step in standard normal space. Default: 0.01 (see `derivatives` class)
+         Default: :code:`seed_u = (0, 0, ..., 0)`
+        :param df_step: Finite difference step in standard normal space. Default: :math:`0.01`
         :param corr_z: Covariance matrix
          If `corr_x` is provided, it is the correlation matrix (:math:`\mathbf{C_X}`) of the random vector **X** .
          If `corr_z` is provided, it is the correlation matrix (:math:`\mathbf{C_Z}`) of the standard normal random
          vector **Z** .
          Default: `corr_z` is specified as the identity matrix.
-        :param iterations_number: Maximum number of iterations for the `HLRF` algorithm. Default: 100
-        :param tol1: Convergence threshold for criterion `e1` of the `HLRF` algorithm. Default: 1.0e-3
-        :param tol2: Convergence threshold for criterion `e2` of the `HLRF` algorithm. Default: 1.0e-3
-        :param tol3: Convergence threshold for criterion `e3` of the  `HLRF` algorithm. Default: 1.0e-3
+        :param iterations_number: Maximum number of iterations for the `HLRF` algorithm. Default: :math:`100`
+        :param tol1: Convergence threshold for criterion `e1` of the `HLRF` algorithm. Default: :math:`1.0e-3`
+        :param tol2: Convergence threshold for criterion `e2` of the `HLRF` algorithm. Default: :math:`1.0e-3`
+        :param tol3: Convergence threshold for criterion `e3` of the  `HLRF` algorithm. Default: :math:`1.0e-3`
         
         """
         super().__init__(
@@ -72,28 +72,40 @@ class FORM(TaylorSeries):
         self.logger = logging.getLogger(__name__)
 
         # Initialize output
-        self.beta_form = None
-        self.DesignPoint_U = None
-        self.DesignPoint_X = None
-        self.alpha = None
+        self.beta_form: float = None
+        """Hasofer-Lind reliability index."""
+        self.DesignPoint_U: list = None
+        """Design point in the uncorrelated standard normal space U."""
+        self.DesignPoint_X: list = None
+        """Design point in the parameter space X."""
+        self.alpha: float = None
+        """Direction cosine."""
         self.failure_probability = None
         self.x = None
         self.alpha = None
         self.g0 = None
-        self.form_iterations = None
+        self.form_iterations: int = None
+        """Number of model evaluations."""
         self.df_step = df_step
-        self.error_record = None
+        self.error_record: float = None
+        """Record of the error defined by criteria `e1, e2, e3`."""
 
         self.tol1 = tol1
         self.tol2 = tol2
         self.tol3 = tol3
 
-        self.u_record = None
-        self.x_record = None
-        self.g_record = None
-        self.dg_u_record = None
-        self.alpha_record = None
-        self.beta_record = None
+        self.u_record: list = None
+        """Record of all iteration points in the standard normal space **U**."""
+        self.x_record: list = None
+        """Record of all iteration points in the parameter space **X**."""
+        self.g_record: list = None
+        """Record of the performance function."""
+        self.dg_u_record: list = None
+        """Record of the model’s gradient in the standard normal space."""
+        self.alpha_record: list = None
+        """Record of the alpha (directional cosine)."""
+        self.beta_record: list = None
+        """Record of all Hasofer-Lind reliability index values."""
         self.jzx = None
 
         self.call = None
@@ -109,7 +121,11 @@ class FORM(TaylorSeries):
         """
         Runs FORM
 
-        :param seed_x: See :class:`.TaylorSeries` parent class.
+        :param seed_u | seed_x: The initial starting point for the `Hasofer-Lind` algorithm.
+         Either `seed_u` or `seed_x` must be provided.
+         If `seed_u` is provided, it should be a point in the uncorrelated standard normal space of **U**.
+         If `seed_x` is provided, it should be a point in the parameter space of **X**.
+         Default: :code:`seed_u = (0, 0, ..., 0)`
         """
         self.logger.info("UQpy: Running FORM...")
         if seed_u is None and seed_x is None:

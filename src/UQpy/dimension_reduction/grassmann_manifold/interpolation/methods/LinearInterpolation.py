@@ -8,27 +8,37 @@ from UQpy.dimension_reduction.grassmann_manifold.interpolation.baseclass.Interpo
 
 
 class LinearInterpolation(InterpolationMethod):
-    """
-    A class to perform piecewise linear interpolation in high dimensions.
-    """
-    def interpolate(self,
-                    coordinates: NumpyFloatArray,
-                    samples: NumpyFloatArray,
-                    point: NumpyFloatArray) -> NumpyFloatArray:
+    def __init__(self):
+        """
+        A class to perform piecewise linear interpolation in high dimensions.
+
+        """
+        self.coordinates=None
+        self.samples = None
+
+    def interpolate(self, point: NumpyFloatArray) -> NumpyFloatArray:
         """
         Method to perform the interpolation.
 
-        :param coordinates: Nodes of the interpolant
-        :param samples: Data to interpolate
+
         :param point: Point to interpolation
 
         """
-        nargs = len(samples)
-        shape_ref = np.shape(samples[0])
+        nargs = len(self.samples)
+        shape_ref = np.shape(self.samples[0])
         for i in range(1, nargs):
-            if np.shape(samples[i]) != shape_ref:
+            if np.shape(self.samples[i]) != shape_ref:
                 raise TypeError("UQpy: Input matrices have different shape.")
 
-        interp = LinearNDInterpolator(coordinates, samples)
+        interp = LinearNDInterpolator(self.coordinates, self.samples)
         interp_point = interp(point)
         return interp_point
+
+    def fit(self, coordinates: NumpyFloatArray, manifold_data, samples: list[NumpyFloatArray]):
+        """
+
+        :param coordinates: Nodes of the interpolant
+        :param samples: Data to interpolate
+        """
+        self.coordinates = coordinates
+        self.samples = samples

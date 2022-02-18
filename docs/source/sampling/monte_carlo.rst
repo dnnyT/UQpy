@@ -7,9 +7,23 @@ The advantage of using the :class:`.MonteCarloSampling` class for :py:mod:`UQpy`
 with the :py:mod:`scipy.stats` package, is that it allows building an object containing the samples and their distributions
 for integration with other :py:mod:`UQpy` modules.
 
-Monte Carlo Sampling Class Descriptions
+Monte Carlo Sampling Class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autoclass:: UQpy.sampling.MonteCarloSampling
-    :members:
+Methods
+~~~~~~~~~~~~~~~~~~
 
+.. autoclass:: UQpy.sampling.MonteCarloSampling
+    :members: run, transform_u01
+
+Attributes
+~~~~~~~~~~~~~~~~~~
+.. autoattribute:: UQpy.sampling.MonteCarloSampling.samples
+.. autoattribute:: UQpy.sampling.MonteCarloSampling.samplesU01
+
+
+
+.. toctree::
+   :hidden:
+
+   Examples <../auto_examples/sampling/monte_carlo/index>

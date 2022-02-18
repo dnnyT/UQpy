@@ -4,4 +4,3 @@ from UQpy.inference.inference_models.ComputationalModel import ComputationalMode
 from UQpy.inference.inference_models.DistributionModel import DistributionModel
 from UQpy.inference.inference_models.LogLikelihoodModel import LogLikelihoodModel
 
-from . import baseclass

@@ -7,9 +7,15 @@ The Karhunen Loève Expansion expands the stochastic process as follows:
 
 where :math:`\theta_i(\omega)` are uncorrelated standardized random variables and :math:`\lambda_i` and :math:`f_i(x)` are the eigenvalues and eigenvectors repsectively of the covariance function :math:`C(x_1, x_2)`.
 
-KarhunenLoeve Class Descriptions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KarhunenLoeve Class
+^^^^^^^^^^^^^^^^^^^^
 
+Methods
+"""""""
 .. autoclass:: UQpy.stochastic_process.KarhunenLoeveExpansion
-    :members:
-    :private-members:
+    :members: run
+
+Attributes
+""""""""""
+.. autoattribute:: UQpy.stochastic_process.KarhunenLoeveExpansion.samples
+.. autoattribute:: UQpy.stochastic_process.KarhunenLoeveExpansion.xi

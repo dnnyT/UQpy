@@ -38,25 +38,25 @@ class RunModel:
     # modified: 5 / 8 / 2020 by Michael D.Shields
     @beartype
     def __init__(
-        self,
-        samples=None,
-        model_script: str = None,
-        model_object_name: str = None,
-        input_template: str = None,
-        var_names: list[str] = None,
-        output_script: str = None,
-        output_object_name: str = None,
-        ntasks: int = 1,
-        cores_per_task: int = 1,
-        nodes: int = 1,
-        cluster: bool = False,
-        resume: bool = False,
-        model_dir: str = "Model_Runs",
-        fmt=None,
-        separator: str = ", ",
-        vec: bool = True,
-        delete_files: bool = False,
-        **kwargs
+            self,
+            samples: Union[list, NumpyFloatArray] = None,
+            model_script: str = None,
+            model_object_name: str = None,
+            input_template: str = None,
+            var_names: list[str] = None,
+            output_script: str = None,
+            output_object_name: str = None,
+            ntasks: int = 1,
+            cores_per_task: int = 1,
+            nodes: int = 1,
+            cluster: bool = False,
+            resume: bool = False,
+            model_dir: str = "Model_Runs",
+            fmt=None,
+            separator: str = ", ",
+            vec: bool = True,
+            delete_files: bool = False,
+            **kwargs
     ):
         """
         Run a computational model at specified sample points.
@@ -67,8 +67,7 @@ class RunModel:
         input file, the name of the Python script that runs the model, and an (optional) output Python script.
 
 
-        :param list samples: Samples to be passed as inputs to the model.
-
+        :param samples: Samples to be passed as inputs to the model.
          Regardless of data type, the first dimension of ``samples`` must be equal to the number of samples at which
          to execute the model. That is, ``len(samples) = nsamples``.
 
@@ -81,18 +80,18 @@ class RunModel:
 
          Used in both python and third-party model execution.
 
-        :param str model_script: The filename (with .py extension) of the Python script which contains commands to
+        :param model_script: The filename (with .py extension) of the Python script which contains commands to
          execute the model.
 
          The named file must be present in the current working directory from which :class:`.RunModel` is called.
-        :param str model_object_name: In the Python workflow, `model_object_name` specifies the name of the function or
+        :param model_object_name: In the Python workflow, `model_object_name` specifies the name of the function or
          class within `model_script' that executes the model. If there is only one function or class in the
          `model_script`, then it is not necessary to specify the model_object_name. If there are multiple objects within
          the `model_script`, then `model_object_name` must be specified.
 
          `model_object_name` is not used in the third-party software model workflow.
 
-        :param str input_template: The name of the template input file that will be used to generate input files for
+        :param input_template: The name of the template input file that will be used to generate input files for
          each run of the model. When operating :class:`.RunModel` with a third-party software model, ``input_template`` must
          be specified.
 
@@ -100,7 +99,7 @@ class RunModel:
 
          `input_template` is not used in the Python model workflow.
 
-        :param list[str] var_names: A list containing the names of the variables present in `input_template`.
+        :param var_names: A list containing the names of the variables present in `input_template`.
 
          If `input template` is provided and  `var_names` is not passed, i.e. if ``var_names=None``, then the default
          variable names `x0`, `x1`, `x2`,..., `xn` are created and used by :class:`.RunModel`, where `n` is the number of
@@ -115,18 +114,18 @@ class RunModel:
          output files and return the quantities of interest to :class:`.RunModel` for subsequent :py:mod:`UQpy` processing (e.g. for
          adaptive methods that utilize the results of previous simulations to initialize new simulations).
 
-         If, in the third-party software model workflow, ``output_script = None`` (the default), then the qoi_list
-         attribute is empty and postprocessing must be handled outside of :py:mod:`UQpy`.
+         If, in the third-party software model workflow, ``output_script = None`` (the default), then the
+         :py:attr:`qoi_list` attribute is empty and postprocessing must be handled outside of :py:mod:`UQpy`.
 
          If used, the named file must be present in the current working directory from which :class:`.RunModel` is called.
 
          `output_script` is not used in the Python model workflow. In the Python model workflow, all model postprocessing
          is handled directly within `model_script`.
 
-        :param str output_object_name: The name of the function or class within `output_script` that is used to collect
+        :param output_object_name: The name of the function or class within `output_script` that is used to collect
          and process the output values from third-party software model output files. If the object is a class, the
-         output must be saved as an attribute called `qoi`. If it is a function, it should return the output quantity of
-         interest.
+         output must be saved as an attribute called :py:attr:`qoi`. If it is a function, it should return the output
+         quantity of interest.
 
          If there is only one function or only one class in `output_script`, then it is not necessary to specify
          `output_object_name`. If there are multiple objects in `output_script`, then output_object_name must be
@@ -134,7 +133,7 @@ class RunModel:
 
          `output_object_name` is not used in the Python model workflow.
 
-        :param int ntasks: Number of tasks to be run in parallel. By default, ``ntasks = 1`` and the models are executed
+        :param ntasks: Number of tasks to be run in parallel. By default, ``ntasks = 1`` and the models are executed
          serially.
 
          Setting ntasks equal to a positive integer greater than 1 will trigger the parallel workflow.
@@ -142,18 +141,18 @@ class RunModel:
          `ntasks` is used for both the Python and third-party model workflows. :class:`.RunModel` uses `GNU parallel` to
          execute third-party models in parallel and the multiprocessing module to execute Python models in parallel.
 
-        :param int cores_per_task: Number of cores to be used by each task. In cases where a third-party model runs across
+        :param cores_per_task: Number of cores to be used by each task. In cases where a third-party model runs across
          multiple CPUs, this optional attribute allocates the necessary resources to each model evaluation.
 
          `cores_per_task` is not used in the Python model workflow.
 
-        :param int nodes: Number of nodes across which to distribute individual tasks on an HPC cluster in the third-party
+        :param nodes: Number of nodes across which to distribute individual tasks on an HPC cluster in the third-party
          model workflow. If more than one compute node is necessary to execute individual runs in parallel, `nodes` must
          be specified.
 
          `nodes` is not used in the Python model workflow.
 
-        :param bool cluster: Set ``cluster = True`` to run on an HPC cluster.
+        :param cluster: Set ``cluster = True`` to run on an HPC cluster.
 
          :class:`.RunModel` currently supports computations on HPC clusters using the SLURM scheduler
          (https://slurm.schedmd.com). The set of model evaulations is submitted using the GNU `parallel` command with
@@ -164,7 +163,7 @@ class RunModel:
 
          `cluster` is not used for the Python model workflow.
 
-        :param bool resume: If ``resume = True``, `GNU parallel` enables :py:mod:`UQpy` to resume execution of any model
+        :param resume: If ``resume = True``, `GNU parallel` enables :py:mod:`UQpy` to resume execution of any model
          evaluations that failed to execute in the third-party software model workflow.
 
          To use this feature, execute the same call to :class:`.RunModel` that failed to complete but with ``resume = True``.
@@ -172,11 +171,11 @@ class RunModel:
 
          `resume` is not used in the Python model workflow.
 
-        :param str model_dir: Specifies the name of the sub-directory from which the model will be executed and to which
+        :param model_dir: Specifies the name of the sub-directory from which the model will be executed and to which
          output files will be saved.  A new directory is created by :class:`.RunModel` within the current directory whose name
          is `model_dir` appended with a timestamp.
 
-        :param str fmt: If the `template_input` requires variables to be written in specific format, this format can be
+        :param fmt: If the `template_input` requires variables to be written in specific format, this format can be
          specified here.
 
          Format specification follows standard Python conventions for the str.format() command described at:
@@ -188,11 +187,11 @@ class RunModel:
 
          `fmt` is not used in the Python model workflow.
 
-        :param str separator: A string used to delimit values when printing arrays to the `template_input`.
+        :param separator: A string used to delimit values when printing arrays to the `template_input`.
 
          `separator` is not used in the Python model workflow.
 
-        :param bool vec: Specifies vectorized (``vec = True``) or looped (``vec = False``) model evaluation in the
+        :param vec: Specifies vectorized (``vec = True``) or looped (``vec = False``) model evaluation in the
          serial Python model workflow.
 
          In the Python model workflow, `model_script` may be written to accept a single sample or multiple samples at a
@@ -202,55 +201,19 @@ class RunModel:
 
          `vec` is not used in the third-party model workflow.
 
-        :param bool delete_files: Specifies whether or not to delete individual run output files after model execution
+        :param delete_files: Specifies whether or not to delete individual run output files after model execution
          and output processing.
 
          If `delete_files = True`, :class:`.RunModel` will remove all `run_i...` directories in the `model_dir`.
 
         :param kwargs: Additional inputs to the Python object specified by `model_object_name` in the Python model workflow.
 
-        `**kwargs` is not used in the third-party model workflow.
+         `**kwargs` is not used in the third-party model workflow.
 
-        **Attributes**
-
-    * **samples** (`ndarray`)
-        Internally, :class:`.RunModel` converts the input `samples` into a numpy `ndarray` with at least two dimension where
-        the first dimension of the `ndarray` corresponds to a single sample to be executed by the model.
-
-    * **nsim** (`int`)
-        Number of model evaluations to be performed, ``nsim = len(samples)``.
-
-    * **nexist** (`int`)
-        Number of pre-existing model evaluations, prior to a new :meth:`run` method call.
-
-        If the :meth:`run` methods has previously been called and model evaluations performed, subsequent calls to the
-        :meth:`run` method will be appended to the :class:`RunModel` object. `nexist` stores the number of previously existing
-        model evaluations.
-
-    * **n_vars** (`int`)
-        Number of variables to be passed for each model evaluation, ``n_vars = len(samples[0])``.
-
-        Note that variables do not need to be scalars. Variables can be scalars, vectors, matrices, or tensors. When
-        writing vectors, matrices, and tensors to a `input_template` they are first flattened and written in delimited
-        form.
-
-    * **qoi_list** (`list`)
-        A list containing the output quantities of interest
-
-        In the third-party model workflow, these output quantities of interest are extracted from the model output files
-        by `output_script`.
-
-        In the Python model workflow, the returned quantity of interest from the model evaluations is stored as
-        `qoi_list`.
-
-        This attribute is commonly used for adaptive algorithms that employ learning functions based on previous model
-        evaluations.
         """
         # Check the platform and build appropriate call to Python
         if platform.system() in ["Windows"]:
             self.python_command = "python"
-        elif platform.system() in ["Darwin", "Linux", "Unix"]:
-            self.python_command = "python3"
         else:
             self.python_command = "python3"
 
@@ -266,9 +229,7 @@ class RunModel:
             pass
         elif isinstance(self.fmt, str):
             if (self.fmt[0] != "{") or (self.fmt[-1] != "}") or (":" not in self.fmt):
-                raise ValueError(
-                    "\nUQpy: fmt should be a string in brackets indicating a standard Python format.\n"
-                )
+                raise ValueError("\nUQpy: fmt should be a string in brackets indicating a standard Python format.\n")
         else:
             raise TypeError("\nUQpy: fmt should be a str.\n")
 
@@ -280,14 +241,17 @@ class RunModel:
         # Input related
         self.input_template = input_template
         self.var_names = var_names
-        self.n_vars = 0
+        self.n_vars: int = 0
+        """Number of variables to be passed for each model evaluation, ``n_vars = len(samples[0])``.
+
+        Note that variables do not need to be scalars. Variables can be scalars, vectors, matrices, or tensors. When
+        writing vectors, matrices, and tensors to a `input_template` they are first flattened and written in delimited
+        form."""
 
         # Check if var_names is a list of strings
         if self.var_names is not None:
             if not self._is_list_of_strings(self.var_names):
-                raise ValueError(
-                    "\nUQpy: Variable names should be passed as a list of strings.\n"
-                )
+                raise ValueError("\nUQpy: Variable names should be passed as a list of strings.\n")
 
         # Establish parent directory for simulations
         self.parent_dir = os.getcwd()
@@ -356,23 +320,38 @@ class RunModel:
         self.cluster = cluster
 
         # Initialize sample related variables
-        self.samples = []
+        self.samples: Numpy2DFloatArray = []
+        """Internally, :class:`.RunModel` converts the input `samples` into a numpy `ndarray` with at least two 
+        dimension where the first dimension of the :class:`numpy.ndarray` corresponds to a single sample to be executed 
+        by the model."""
         self.samples = np.atleast_2d(self.samples)
-        self.qoi_list = []
-        self.nexist = 0
-        self.nsim = 0
+        self.qoi_list: list = []
+        """A list containing the output quantities of interest
+
+        In the third-party model workflow, these output quantities of interest are extracted from the model output files
+        by `output_script`.
+
+        In the Python model workflow, the returned quantity of interest from the model evaluations is stored as
+        :py:attr:`qoi_list`.
+
+        This attribute is commonly used for adaptive algorithms that employ learning functions based on previous model
+        evaluations."""
+        self.nexist: int = 0
+        """Number of pre-existing model evaluations, prior to a new :meth:`run` method call.
+
+        If the :meth:`run` methods has previously been called and model evaluations performed, subsequent calls to the
+        :meth:`run` method will be appended to the :class:`RunModel` object. :py:attr:`nexist` stores the number of 
+        previously existing model evaluations."""
+        self.nsim: int = 0
+        """Number of model evaluations to be performed, ``nsim = len(samples)``."""
 
         # Check if samples are provided.
         if samples is None:
-            self.logger.info(
-                "\nUQpy: No samples are provided. Creating the object and building the model directory.\n"
-            )
+            self.logger.info("\nUQpy: No samples are provided. Creating the object and building the model directory.\n")
         elif isinstance(samples, (list, np.ndarray)):
             self.run(samples)
         else:
-            raise ValueError(
-                "\nUQpy: samples must be passed as a list or numpy ndarray\n"
-            )
+            raise ValueError("\nUQpy: samples must be passed as a list or numpy ndarray\n")
 
     def run(self, samples=None, append_samples=True):
         """
@@ -408,10 +387,8 @@ class RunModel:
 
         # Change current working directory to model run directory
         os.chdir(self.model_dir)
-        self.logger.info(
-            "\nUQpy: All model evaluations will be executed from the following directory: \n"
-            + self.model_dir
-        )
+        self.logger.info("\nUQpy: All model evaluations will be executed from the following directory: \n"
+                         + self.model_dir)
 
         # Number of simulations to be performed
         self.nsim = len(samples)
@@ -434,10 +411,8 @@ class RunModel:
                 if self.var_names is not None:
                     # Check to see if self.var_names has the correct length
                     if len(self.var_names) != self.n_vars:
-                        raise ValueError(
-                            "\nUQpy: var_names must have the same length as the number of variables (i.e. "
-                            "len(var_names) = len(samples[0]).\n"
-                        )
+                        raise ValueError("\nUQpy: var_names must have the same length as the number of variables (i.e. "
+                                         "len(var_names) = len(samples[0]).\n")
                 else:
                     # If var_names is not passed and there is an input template, create default variable names
                     self.var_names = []
@@ -456,11 +431,8 @@ class RunModel:
         # Check if there is a template input file or not and execute the appropriate function
         if self.input_template is not None:  # If there is a template input file
             # Check if it is a file and is readable
-            assert os.path.isfile(self.input_template) and os.access(
-                self.input_template, os.R_OK
-            ), "\nUQpy: File {} doesn't exist or isn't readable".format(
-                self.input_template
-            )
+            assert os.path.isfile(self.input_template) and os.access(self.input_template, os.R_OK), \
+                "\nUQpy: File {} doesn't exist or isn't readable".format(self.input_template)
             # Read in the text from the template files
             with open(self.input_template, "r") as f:
                 self.template_text = str(f.read())
@@ -490,9 +462,7 @@ class RunModel:
                 self._parallel_python_execution()
 
         # Return to parent directory
-        self.logger.info(
-            "\nUQpy: Returning to the parent directory:\n" + self.parent_dir
-        )
+        self.logger.info("\nUQpy: Returning to the parent directory:\n" + self.parent_dir)
         os.chdir(self.parent_dir)
 
         if self.delete_files:
@@ -513,9 +483,7 @@ class RunModel:
         changes the current working directory to the model run directory, calls the input function, executes the model,
         calls the output function, removes the copied files and folders, and returns to the previous directory.
         """
-        self.logger.info(
-            "\nUQpy: Performing serial execution of the third-party model.\n"
-        )
+        self.logger.info("\nUQpy: Performing serial execution of the third-party model.\n")
 
         # Loop over the number of simulations, executing the model once per loop
         for i in range(self.nexist, self.nexist + self.nsim):
@@ -525,12 +493,7 @@ class RunModel:
 
             # Change current working directory to model run directory
             os.chdir(work_dir)
-            self.logger.info(
-                "\nUQpy: Running model number "
-                + str(i)
-                + " in the following directory: \n"
-                + work_dir
-            )
+            self.logger.info("\nUQpy: Running model number " + str(i) + " in the following directory: \n" + work_dir)
 
             # Call the input function
             self._input_serial(i)
@@ -548,13 +511,9 @@ class RunModel:
             # Return to the model directory
             os.chdir(self.model_dir)
             self.logger.info("\nUQpy: Model evaluation " + str(i) + " complete.\n")
-            self.logger.info(
-                "\nUQpy: Returning to the model directory:\n" + self.model_dir
-            )
+            self.logger.info("\nUQpy: Returning to the model directory:\n" + self.model_dir)
 
-        self.logger.info(
-            "\nUQpy: Serial execution of the third-party model complete.\n"
-        )
+        self.logger.info("\nUQpy: Serial execution of the third-party model complete.\n")
 
     ####################################################################################################################
 
@@ -566,13 +525,9 @@ class RunModel:
         for each model run, copies files to the model run directory, executes the model in parallel, collects output,
         removes the copied files and folders.
         """
-        self.logger.info(
-            "\nUQpy: Performing parallel execution of the third-party model.\n"
-        )
+        self.logger.info("\nUQpy: Performing parallel execution of the third-party model.\n")
         # Call the input function
-        self.logger.info(
-            "\nUQpy: Creating inputs for parallel execution of the third-party model.\n"
-        )
+        self.logger.info("\nUQpy: Creating inputs for parallel execution of the third-party model.\n")
 
         # Create all input files for the parallel execution and place them in the proper directories
         for i in range(self.nexist, self.nexist + self.nsim):
@@ -588,41 +543,28 @@ class RunModel:
         self._execute_parallel()
 
         # Call the output function
-        self.logger.info(
-            "\nUQpy: Collecting outputs from parallel execution of the third-party model.\n"
-        )
+        self.logger.info("\nUQpy: Collecting outputs from parallel execution of the third-party model.\n")
 
         for i in range(self.nexist, self.nexist + self.nsim):
             # Change current working directory to model run directory
             work_dir = os.path.join(self.model_dir, "run_" + str(i))
-            self.logger.info(
-                "\nUQpy: Changing to the following directory for output processing:\n"
-                + work_dir
-            )
+            self.logger.info("\nUQpy: Changing to the following directory for output processing:\n" + work_dir)
             os.chdir(work_dir)
 
             # Run output processing function
             if self.output_script is not None:
-                self.logger.info(
-                    "\nUQpy: Processing output from parallel execution of the third-party model run "
-                    + str(i)
-                    + ".\n"
-                )
+                self.logger.info("\nUQpy: Processing output from parallel execution of the third-party model run "
+                                 + str(i) + ".\n")
                 self._output_serial(i)
 
             # Remove the copied files and folders
             self._remove_copied_files(work_dir)
 
             # Change back to the upper directory
-            self.logger.info(
-                "\nUQpy: Changing back to the following model directory:\n"
-                + self.model_dir
-            )
+            self.logger.info("\nUQpy: Changing back to the following model directory:\n" + self.model_dir)
             os.chdir(self.model_dir)
 
-        self.logger.info(
-            "\nUQpy: Parallel execution of the third-party model complete.\n"
-        )
+        self.logger.info("\nUQpy: Parallel execution of the third-party model complete.\n")
 
     ####################################################################################################################
     def _serial_python_execution(self):
@@ -638,18 +580,11 @@ class RunModel:
         # Run python model
         if self.vec:
             # If the Python model is vectorized to accept many samples.
-            self.model_output = model_object(
-                self.samples[self.nexist : self.nexist + self.nsim],
-                **self.python_kwargs
-            )
+            self.model_output = model_object(self.samples[self.nexist: self.nexist + self.nsim], **self.python_kwargs)
             if self.model_is_class:
-                self.qoi_list[self.nexist : self.nexist + self.nsim] = list(
-                    self.model_output.qoi
-                )
+                self.qoi_list[self.nexist: self.nexist + self.nsim] = list(self.model_output.qoi)
             else:
-                self.qoi_list[self.nexist : self.nexist + self.nsim] = list(
-                    self.model_output
-                )
+                self.qoi_list[self.nexist: self.nexist + self.nsim] = list(self.model_output)
         else:
             # If the Python model is not vectorized and accepts only a single sample.
             for i in range(self.nexist, self.nexist + self.nsim):
@@ -658,15 +593,11 @@ class RunModel:
                 if len(self.python_kwargs) == 0:
                     self.model_output = model_object(sample_to_send)
                 else:
-                    self.model_output = model_object(
-                        sample_to_send, **self.python_kwargs
-                    )
+                    self.model_output = model_object(sample_to_send, **self.python_kwargs)
                 if self.model_is_class:
                     self.qoi_list[i] = self.model_output.qoi
                 else:
                     self.qoi_list[i] = self.model_output
-
-        self.logger.info("\nUQpy: Serial execution of the python model complete.\n")
 
         self.logger.info("\nUQpy: Serial execution of the python model complete.\n")
 
@@ -678,10 +609,7 @@ class RunModel:
         This function imports the model object from the model script, and executes the model in parallel by passing the
         samples along with keyword arguments, if any, as inputs to the model object.
         """
-
-        self.logger.info(
-            "\nUQpy: Performing parallel execution of the model without template input.\n"
-        )
+        self.logger.info("\nUQpy: Performing parallel execution of the model without template input.\n")
         import multiprocessing
         import UQpy.utilities.Utilities as Utilities
 
@@ -690,18 +618,9 @@ class RunModel:
         for i in range(self.nexist, self.nexist + self.nsim):
             sample_to_send = np.atleast_2d(self.samples[i])
             if len(self.python_kwargs) == 0:
-                sample.append(
-                    [self.model_script, self.model_object_name, sample_to_send]
-                )
+                sample.append([self.model_script, self.model_object_name, sample_to_send])
             else:
-                sample.append(
-                    [
-                        self.model_script,
-                        self.model_object_name,
-                        sample_to_send,
-                        self.python_kwargs,
-                    ]
-                )
+                sample.append([self.model_script, self.model_object_name, sample_to_send, self.python_kwargs, ])
 
         results = pool.starmap(Utilities.run_parallel_python, sample)
 
@@ -771,23 +690,15 @@ class RunModel:
         """
         # Loop over the number of samples and create input files in a folder in current directory
         for i in range(self.nsim):
-            new_text = self._find_and_replace_var_names_with_values(
-                index=i + self.nexist
-            )
+            new_text = self._find_and_replace_var_names_with_values(index=i + self.nexist)
             folder_to_write = "run_" + str(i + self.nexist) + "/InputFiles"
             # Write the new text to the input file
-            self._create_input_files(
-                file_name=self.input_template,
-                num=i + self.nexist,
-                text=new_text,
-                new_folder=folder_to_write,
-            )
-            self.logger.info(
-                "\nUQpy: Created input files for run "
-                + str(i)
-                + " in the directory: \n"
-                + os.path.join(self.model_dir, folder_to_write)
-            )
+            self._create_input_files(file_name=self.input_template,
+                                     num=i + self.nexist,
+                                     text=new_text,
+                                     new_folder=folder_to_write)
+            self.logger.info("\nUQpy: Created input files for run " + str(i) + " in the directory: \n"
+                             + os.path.join(self.model_dir, folder_to_write))
 
     def _execute_parallel(self):
         """
@@ -809,50 +720,20 @@ class RunModel:
                 os.remove("logs/runtask.log")
             except OSError:
                 pass
-        self.parallel_string = (
-            "parallel --delay 0.2 --joblog logs/runtask.log --resume -j "
-            + str(self.ntasks)
-            + " "
-        )
+        self.parallel_string = ("parallel --delay 0.2 --joblog logs/runtask.log --resume -j " + str(self.ntasks) + " ")
 
         # If running on SLURM cluster
         if self.cluster:
-            self.srun_string = (
-                "srun -N"
-                + str(self.nodes)
-                + " -n1 -c"
-                + str(self.cores_per_task)
-                + " --exclusive "
-            )
+            self.srun_string = ("srun -N" + str(self.nodes) + " -n1 -c" + str(self.cores_per_task) + " --exclusive ")
             self.model_command_string = (
-                self.parallel_string
-                + "'(cd run_{1}"
-                + " && "
-                + self.srun_string
-                + " "
-                + self.python_command
-                + " -u "
-                + str(self.model_script)
-                + " {1})'  ::: {"
-                + str(self.nexist)
-                + ".."
-                + str(self.nexist + self.nsim - 1)
-                + "}"
-            )
+                    self.parallel_string + "'(cd run_{1}" + " && " + self.srun_string + " " + self.python_command
+                    + " -u " + str(self.model_script) + " {1})'  ::: {" + str(self.nexist) + ".."
+                    + str(self.nexist + self.nsim - 1) + "}")
         else:  # If running locally
             self.model_command_string = (
-                self.parallel_string
-                + " 'cd run_{1}"
-                + " && "
-                + self.python_command
-                + " -u "
-                + str(self.model_script)
-                + "' {1}  ::: {"
-                + str(self.nexist)
-                + ".."
-                + str(self.nexist + self.nsim - 1)
-                + "}"
-            )
+                    self.parallel_string + " 'cd run_{1}" + " && " + self.python_command + " -u " + str(
+                self.model_script)
+                    + "' {1}  ::: {" + str(self.nexist) + ".." + str(self.nexist + self.nsim - 1) + "}")
 
         subprocess.run(self.model_command_string, shell=True)
 
@@ -938,9 +819,9 @@ class RunModel:
                         else:
                             to_add = self.fmt.format(temp)
                     new_text = (
-                        new_text[0 : new_text.index(string)]
-                        + to_add
-                        + new_text[(new_text.index(string) + len(string)) :]
+                            new_text[0: new_text.index(string)]
+                            + to_add
+                            + new_text[(new_text.index(string) + len(string)):]
                     )
                     count += 1
             if index == 0:
@@ -990,9 +871,9 @@ class RunModel:
         :type list_of_strings: list
         """
         return (
-            bool(list_of_strings)
-            and isinstance(list_of_strings, list)
-            and all(isinstance(element, str) for element in list_of_strings)
+                bool(list_of_strings)
+                and isinstance(list_of_strings, list)
+                and all(isinstance(element, str) for element in list_of_strings)
         )
 
     def _check_python_model(self):
@@ -1019,17 +900,12 @@ class RunModel:
 
         # There should be at least one class or function in the module - if not there, exit with error.
         if len(class_list) == 0 and len(function_list) == 0:
-            raise ValueError(
-                "\nUQpy: A python model should be defined as a function or class in the script.\n"
-            )
+            raise ValueError("\nUQpy: A python model should be defined as a function or class in the script.\n")
 
         else:  # If there is at least one class or function in the module
             # If the model object name is not given as input and there is only one class or function,
             # take that class name or function name to run the model.
-            if (
-                self.model_object_name is None
-                and len(class_list) + len(function_list) == 1
-            ):
+            if self.model_object_name is None and len(class_list) + len(function_list) == 1:
                 if len(class_list) == 1:
                     self.model_object_name = class_list[0]
                 elif len(function_list) == 1:
@@ -1037,31 +913,18 @@ class RunModel:
 
             # If there is a model_object_name given, check if it is in the list.
             if self.model_object_name in class_list:
-                self.logger.info(
-                    "\nUQpy: The model class that will be run: "
-                    + self.model_object_name
-                )
+                self.logger.info("\nUQpy: The model class that will be run: " + self.model_object_name)
                 self.model_is_class = True
             elif self.model_object_name in function_list:
-                self.logger.info(
-                    "\nUQpy: The model function that will be run: "
-                    + self.model_object_name
-                )
+                self.logger.info("\nUQpy: The model function that will be run: " + self.model_object_name)
                 self.model_is_class = False
             else:
                 if self.model_object_name is None:
-                    raise ValueError(
-                        "\nUQpy: There are more than one objects in the module. Specify the name of the "
-                        "function or class which has to be executed.\n"
-                    )
+                    raise ValueError("\nUQpy: There are more than one objects in the module. Specify the name of the "
+                                     "function or class which has to be executed.\n")
                 else:
-                    print(
-                        "\nUQpy: You specified the model_object_name as: "
-                        + str(self.model_object_name)
-                    )
-                    raise ValueError(
-                        "\nUQpy: The file does not contain an object which was specified as the model.\n"
-                    )
+                    print("\nUQpy: You specified the model_object_name as: " + str(self.model_object_name))
+                    raise ValueError("\nUQpy: The file does not contain an object which was specified as the model.\n")
 
     def _check_output_module(self):
         """
@@ -1086,17 +949,12 @@ class RunModel:
 
         # There should be at least one class or function in the module - if not there, exit with error.
         if len(class_list) == 0 and len(function_list) == 0:
-            raise ValueError(
-                "\nUQpy: The output object should be defined as a function or class in the script.\n"
-            )
+            raise ValueError("\nUQpy: The output object should be defined as a function or class in the script.\n")
 
         else:  # If there is at least one class or function in the module
             # If the model object name is not given as input and there is only one class or function,
             # take that class name or function name to run the model.
-            if (
-                self.output_object_name is None
-                and len(class_list) + len(function_list) == 1
-            ):
+            if self.output_object_name is None and len(class_list) + len(function_list) == 1:
                 if len(class_list) == 1:
                     self.output_object_name = class_list[0]
                 elif len(function_list) == 1:
@@ -1104,32 +962,19 @@ class RunModel:
 
             # If there is a model_object_name given, check if it is in the list.
             if self.output_object_name in class_list:
-                self.logger.info(
-                    "\nUQpy: The output class that will be run: "
-                    + self.output_object_name
-                )
+                self.logger.info("\nUQpy: The output class that will be run: " + self.output_object_name)
                 self.output_is_class = True
             elif self.output_object_name in function_list:
-                self.logger.info(
-                    "\nUQpy: The output function that will be run: "
-                    + self.output_object_name
-                )
+                self.logger.info("\nUQpy: The output function that will be run: " + self.output_object_name)
                 self.output_is_class = False
             else:
                 if self.output_object_name is None:
-                    raise ValueError(
-                        "\nUQpy: There are more than one objects in the module. Specify the name of the "
-                        "function or class which has to be executed.\n"
-                    )
+                    raise ValueError("\nUQpy: There are more than one objects in the module. Specify the name of the "
+                                     "function or class which has to be executed.\n")
                 else:
-                    print(
-                        "\nUQpy: You specified the output object name as: "
-                        + str(self.output_object_name)
-                    )
-                    raise ValueError(
-                        "\nUQpy: The file does not contain an object which was specified as the output "
-                        "processor.\n"
-                    )
+                    print("\nUQpy: You specified the output object name as: " + str(self.output_object_name))
+                    raise ValueError("\nUQpy: The file does not contain an object which was specified as the output "
+                                     "processor.\n")
 
     def _copy_files(self, work_dir):
         os.makedirs(work_dir)

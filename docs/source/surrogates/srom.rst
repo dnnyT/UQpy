@@ -2,7 +2,7 @@
 Stochatic Reduced Order Models - SROMs
 ----------------------------------------
 
-A SROM is a sample-based surrogate for probability models. An SROM takes a set of samples and attributes of a distribution and optimizes the sample probability weights according to the method in [1]_. More specifically, an SROM constructs a reduce order model for arbitrary random variables `X` as follows.
+A SROM is a sample-based surrogate for probability models. An SROM takes a set of samples and attributes of a distribution and optimizes the sample probability weights according to the method in :cite:`Surrogates1`. More specifically, an SROM constructs a reduce order model for arbitrary random variables `X` as follows.
 
 .. math:: \tilde{X} =  \begin{cases} x_1 & probability \text{  }p_1^{(opt)} \\ & \vdots \\ x_m & probability \text{  }p_m^{(opt)} \end{cases}
 
@@ -16,11 +16,13 @@ where :math:`\alpha_1`, :math:`\alpha_2`, :math:`\alpha_3 \geq 0` are constants 
 
 Here, :math:`F(x_{k,i})` and :math:`\hat{F}(x_{k,i})` denote the marginal cumulative distributions of :math:`\mathbf{X}` and :math:`\mathbf{\tilde{X}}` (reduced order model) evaluated at point :math:`x_{k,i}`, :math:`\mu(r; i)` and :math:`\hat{\mu}(r; i)` are the marginal moments of order `r` for variable `i`, and :math:`R(i,j)` and :math:`\hat{R}(i,j)` are correlation matrices of :math:`\mathbf{X}` and :math:`\mathbf{\tilde{X}}` evaluted for components :math:`x_i` and :math:`x_j`. Note also that `m` is the number of sample points and `d` is the number of random variables.
 
-SROM Class Descriptions
+SROM Class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Methods
+"""""""
 .. autoclass:: UQpy.surrogates.stochastic_reduced_order_models.SROM
-    :members:
-    :private-members:
+    :members: run
 
-
-.. [1] M. Grigoriu, “Reduced order models for random functions. Application to stochastic problems”, Applied Mathematical Modelling, Volume 33, Issue 1, Pages 161-175, 2009.
+Attributes
+""""""""""
+.. autoattribute:: UQpy.surrogates.stochastic_reduced_order_models.SROM.sample_weights

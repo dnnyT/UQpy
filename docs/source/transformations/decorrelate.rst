@@ -7,9 +7,15 @@ normal vector :math:`\textbf{u}=[U_1,...,U_n]` can be calculated as:
 
 .. math:: \textbf{u}^\intercal = \mathbf{H}^{-1} \mathbf{z}^\intercal
 
-Decorrelate Class Descriptions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Decorrelate Class
+^^^^^^^^^^^^^^^^^^
 
+Methods
+"""""""
 .. autoclass:: UQpy.transformations.Decorrelate
-    :members:
-    :private-members:
+
+
+Attributes
+""""""""""
+.. autoattribute:: UQpy.transformations.Decorrelate.H
+.. autoattribute:: UQpy.transformations.Decorrelate.samples_u

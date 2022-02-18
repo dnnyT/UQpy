@@ -56,14 +56,33 @@ napoleon_use_param = True
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 bibtex_bibfiles = ['bibliography.bib']
+bibtex_default_style = 'unsrt'
+
+# Try to remove duplicate labels
+autosectionlabel_prefix_document = True
+
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 sphinx_gallery_conf = {
-     'examples_dirs': ['../code/dimension_reduction'],   # path to your example scripts
-     'gallery_dirs': ['auto_examples/dimension_reduction'],  # path to where to save gallery generated output
+     'examples_dirs': ['../code/dimension_reduction',
+                       '../code/distributions/continuous_1d',
+                       '../code/distributions/discrete_1d',
+                       '../code/distributions/multivariate',
+                       '../code/distributions/user_defined',
+                       '../code/sampling/monte_carlo',
+                       '../code/sampling/latin_hypercube',
+                       '../code/sampling/simplex'],   # path to your example scripts
+     'gallery_dirs': ['auto_examples/dimension_reduction',
+                      'auto_examples/distributions/continuous_1d',
+                      'auto_examples/distributions/discrete_1d',
+                      'auto_examples/distributions/multivariate',
+                      'auto_examples/distributions/user_defined',
+                      'auto_examples/sampling/monte_carlo',
+                      'auto_examples/sampling/latin_hypercube',
+                      'auto_examples/sampling/simplex'],  # path to where to save gallery generated output
 }
 
 # -- Options for HTML output -------------------------------------------------

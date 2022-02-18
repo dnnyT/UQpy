@@ -9,9 +9,15 @@ given the correlation matrix :math:`\textbf{C}_z=[\rho_{ij}]`. The correlated st
 
 where :math:`\mathbf{H}` is the lower triangular matrix resulting from the Cholesky decomposition of the correlation matrix, i.e. :math:`\mathbf{C_z}=\mathbf{H}\mathbf{H}^\intercal`.
 
-Correlate Class Descriptions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Correlate Class
+^^^^^^^^^^^^^^^^^
 
+Methods
+"""""""
 .. autoclass:: UQpy.transformations.Correlate
-    :members:
-    :private-members:
+
+Attributes
+""""""""""
+
+.. autoattribute:: UQpy.transformations.Correlate.H
+.. autoattribute:: UQpy.transformations.Correlate.samples_z

@@ -22,18 +22,18 @@ class KarhunenLoeveExpansion:
          The :meth:`run` method is automatically called if `samples_number` is provided. If `samples_number` is not
          provided, then the :class:`.KarhunenLoeveExpansion` object is created but samples are not generated.
         :param correlation_function: The correlation function of the stochastic process of size
-         (`number_time_intervals`, `number_time_intervals`)
+         :code:`(number_time_intervals, number_time_intervals)`
         :param time_interval: The length of time discretization.
         :param threshold: The threshold number of eigenvalues to be used in the expansion.
-        :param random_state: Random seed used to initialize the pseudo-random number generator. Default is None.
+        :param random_state: Random seed used to initialize the pseudo-random number generator. Default is :any:`None`.
 
         """
         self.correlation_function = correlation_function
         self.time_interval = time_interval
         if threshold:
-            self.number_eigen_values = threshold
+            self.number_eigenvalues = threshold
         else:
-            self.number_eigen_values = len(self.correlation_function[0])
+            self.number_eigenvalues = len(self.correlation_function[0])
 
         self.random_state = random_state
         if isinstance(self.random_state, int):
@@ -46,9 +46,9 @@ class KarhunenLoeveExpansion:
         self.logger = logging.getLogger(__name__)
         self.nsamples = samples_number
 
-        self.samples = None
+        self.samples: NumpyFloatArray = None
         """Array of generated samples."""
-        self.xi = None
+        self.xi: NumpyFloatArray = None
         """The independent gaussian random variables used in the expansion."""
 
         if self.nsamples is not None:
@@ -56,9 +56,9 @@ class KarhunenLoeveExpansion:
 
     def _simulate(self, xi):
         lam, phi = np.linalg.eig(self.correlation_function)
-        lam = lam[: self.number_eigen_values]
+        lam = lam[: self.number_eigenvalues]
         lam = np.diag(lam)
-        self.phi = np.real(phi[:, : self.number_eigen_values])
+        self.phi = np.real(phi[:, : self.number_eigenvalues])
         self.lam = lam.astype(np.float64)
         samples = np.dot(self.phi, np.dot(sqrtm(self.lam), xi))
         samples = np.real(samples)
@@ -70,18 +70,18 @@ class KarhunenLoeveExpansion:
         """
         Execute the random sampling in the :class:`.KarhunenLoeveExpansion` class.
 
-        The :meth:`run` method is the function that performs random sampling in the :class:`.KarhunenLoeveExpansion`` class. If `samples_number` is
-        provided when the :class:`.KarhunenLoeveExpansion` object is defined, the :meth:`run` method is automatically called. The
-        user may also call the :meth:`run` method directly to generate samples. The :meth:`run`` method of the
-        :class:`.KarhunenLoeveExpansion` class can be invoked many times and each time the generated samples are appended to
-        the existing samples.
+        The :meth:`run` method is the function that performs random sampling in the :class:`.KarhunenLoeveExpansion``
+        class. If `samples_number` is provided when the :class:`.KarhunenLoeveExpansion` object is defined, the
+        :meth:`run` method is automatically called. The user may also call the :meth:`run` method directly to generate
+        samples. The :meth:`run`` method of the :class:`.KarhunenLoeveExpansion` class can be invoked many times and
+        each time the generated samples are appended to the existing samples.
 
         :param samples_number: Number of samples of the stochastic process to be simulated.
          If the :meth:`run` method is invoked multiple times, the newly generated samples will be appended to the
          existing samples.
 
-        The :meth:`run` method has no returns, although it creates and/or appends the `samples` attribute of the
-        :class:`KarhunenLoeveExpansion` class.
+        The :meth:`run` method has no returns, although it creates and/or appends the :py:attr:`samples` attribute of
+        the :class:`KarhunenLoeveExpansion` class.
         """
         if samples_number is None:
             raise ValueError(
@@ -95,7 +95,7 @@ class KarhunenLoeveExpansion:
         self.logger.info(
             "UQpy: Stochastic Process: Starting simulation of Stochastic Processes."
         )
-        xi = np.random.normal(size=(self.number_eigen_values, self.nsamples))
+        xi = np.random.normal(size=(self.number_eigenvalues, self.nsamples))
         samples = self._simulate(xi)
 
         if self.samples is None:

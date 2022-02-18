@@ -12,27 +12,6 @@ from UQpy.reliability.taylor_series.baseclass.TaylorSeries import TaylorSeries
 
 
 class SORM(TaylorSeries):
-    """
-    A class to perform the Second Order reliability Method. This class is used to correct the estimated FORM probability
-    using second-order information.
-    ``SORM`` is a child class of the ``taylor_series`` class.
-
-    **Input:**
-
-    The ``SORM`` class requires an object of type ``FORM`` as input.
-
-    **Output/Returns:**
-
-    The ``SORM`` class has the same outputs as the ``FORM`` class plus
-
-    * **Pf_sorm** (`float`):
-        Second-order probability of failure estimate.
-
-    * **beta_sorm** (`float`):
-        Second-order reliability index.
-
-    **Methods:**
-    """
 
     @beartype
     def __init__(
@@ -50,7 +29,30 @@ class SORM(TaylorSeries):
         tol2: Union[float, int] = None,
         tol3: Union[float, int] = None,
     ):
+        """
+        :class:`.SORM` is a child class of the :class:`.TaylorSeries` class. Input: The :class:`.SORM` class requires an
+        object of type :class:`.FORM` as input.
 
+        :param form_object: Object of type :class:`.FORM`
+        :param distributions: Marginal probability distributions of each random variable. Must be an object of
+         type :class:`.DistributionContinuous1D` or :class:`.JointIndependent`.
+        :param seed_u: seed_u: The initial starting point for the `Hasofer-Lind` algorithm.
+         Either `seed_u` or `seed_x` must be provided.
+         If `seed_u` is provided, it should be a point in the uncorrelated standard normal space of **U**.
+         If `seed_x` is provided, it should be a point in the parameter space of **X**.
+         Default: :code:`seed_u = (0, 0, ..., 0)`
+        :param runmodel_object: The computational model. It should be of type :class:`RunModel`.
+        :param df_step: Finite difference step in standard normal space. Default: :math:`0.01`
+        :param corr_x: Covariance matrix
+         If `corr_x` is provided, it is the correlation matrix (:math:`\mathbf{C_X}`) of the random vector **X** .
+         If `corr_z` is provided, it is the correlation matrix (:math:`\mathbf{C_Z}`) of the standard normal random
+         vector **Z** .
+         Default: `corr_z` is specified as the identity matrix.
+        :param iterations_number: Maximum number of iterations for the `HLRF` algorithm. Default: :math:`100`
+        :param tol1: Convergence threshold for criterion `e1` of the `HLRF` algorithm. Default: :math:`1.0e-3`
+        :param tol2: Convergence threshold for criterion `e2` of the `HLRF` algorithm. Default: :math:`1.0e-3`
+        :param tol3: Convergence threshold for criterion `e3` of the  `HLRF` algorithm. Default: :math:`1.0e-3`
+        """
         super().__init__(
             distributions,
             runmodel_object,
@@ -66,20 +68,31 @@ class SORM(TaylorSeries):
             df_step,
         )
         self.logger = logging.getLogger(__name__)
-        self.beta_form = None
-        self.DesignPoint_U = None
-        self.DesignPoint_X = None
+        self.beta_form: float = None
+        """Hasofer-Lind reliability index."""
+        self.DesignPoint_U: list = None
+        """Design point in the uncorrelated standard normal space **U**."""
+        self.DesignPoint_X: list = None
+        """Design point in the parameter space **X**."""
         self.Pf_form = None
-        self.form_iterations = None
-        self.u_record = None
-        self.x_record = None
-        self.g_record = None
+        self.form_iterations: int = None
+        """Number of model evaluations."""
+        self.u_record: list = None
+        """Record of all iteration points in the standard normal space **U**."""
+        self.x_record: list = None
+        """Record of all iteration points in the parameter space **X**."""
+        self.g_record: list = None
+        """Record of the performance function."""
         self.dg_record = None
-        self.beta_record = None
-        self.alpha_record = None
-        self.dg_u_record = None
+        self.beta_record: list = None
+        """Record of all Hasofer-Lind reliability index values."""
+        self.alpha_record: list = None
+        """Record of the alpha (directional cosine)."""
+        self.dg_u_record: list = None
+        """Record of the model’s gradient in the standard normal space."""
         self.df_step = df_step
-        self.error_record = None
+        self.error_record: float = None
+        """Record of the error defined by criteria `e1, e2, e3`."""
 
         self.failure_probability = None
         self.beta_sorm = None

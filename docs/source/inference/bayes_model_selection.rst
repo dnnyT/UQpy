@@ -9,21 +9,44 @@ where the evidence (also called marginal likelihood) :math:`p(\mathcal{D} \vert 
 
 .. math:: p(\mathcal{D} \vert m_{i}) = \int_{\Theta} p(\mathcal{D} \vert m_{i}, \theta) p(\theta \vert m_{i}) d\theta
 
-Currently, calculation of the evidence is performed using the method of the harmonic mean [3]_:
+Currently, calculation of the evidence is performed using the method of the harmonic mean :cite:`BayesModelSelection`:
 
 .. math:: p(\mathcal{D} \vert m_{i}) = \left[ \frac{1}{B} \sum_{b=1}^{B} \frac{1}{p(\mathcal{D} \vert m_{i}, \theta_{b})} \right]^{-1}
 
 where :math:`\theta_{1,\cdots,B}` are samples from the posterior pdf of :math:`\theta`. In UQpy, these samples are
 obtained via the :class:`.BayesParameterEstimation` class. However, note that this method is known to yield evidence
-estimates with large variance. Future releases of :py:mod:`UQpy` will include more robust methods for computation of model
+estimates with large variance. The Harmonic mean method for calculating the evidence is provided to the initializer
+of the :class:`.BayesModelSelection` class. No input parameters are required for its initialization.
+
+.. autoclass:: UQpy.inference.HarmonicMean
+
+
+Future releases of :py:mod:`UQpy` will include more robust methods for computation of model
 evidences. Also, it is known that results of such Bayesian model selection procedure usually highly depends on the
 choice of prior for the parameters of the competing models, thus the user should carefully define such priors when
-creating instances of the :class:`.InferenceModel` class.
+creating instances of the :class:`.InferenceModel` class. The user can create custom methods for calculating
+evidences, by extending the :class:`.EvidenceMethod` abstract baseclass. To achieve that, a custom implementation
+of the :meth:`.estimate_evidence` must be provided.
 
-BayesModelSelection Class Descriptions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autoclass:: UQpy.inference.BayesModelSelection
+EvidenceMethod Class
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. autoclass:: UQpy.inference.EvidenceMethod
     :members:
 
-.. [3] A.E. Raftery, M.A. Newton, J.M. Satagopan and P.N. Krivitsky, "Estimating the Integrated Likelihood via Posterior Simulation Using the Harmonic Mean Identity", Bayesian Statistics 8, 2007
+
+
+BayesModelSelection Class
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Methods
+"""""""
+.. autoclass:: UQpy.inference.BayesModelSelection
+    :members: run, sort_models
+
+Attributes
+""""""""""
+.. autoattribute:: UQpy.inference.BayesModelSelection.candidate_models
+.. autoattribute:: UQpy.inference.BayesModelSelection.bayes_estimators
+.. autoattribute:: UQpy.inference.BayesModelSelection.evidences
+.. autoattribute:: UQpy.inference.BayesModelSelection.probabilities

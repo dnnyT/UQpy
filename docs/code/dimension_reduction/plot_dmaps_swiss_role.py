@@ -39,11 +39,11 @@ ax.view_init(10, 70)
 
 
 #%% md
-# ------------------------------------------------------------------------------------------
+#
 # Case 1: Find the optimal parameter of the Gaussian kernel scale epsilon
 kernel = GaussianKernel()
 
-dmaps_object = DiffusionMaps.create_from_data(data=X, alpha=1.0, eigenvectors_number=9,
+dmaps_object = DiffusionMaps.create_from_data(data=X, alpha=1.0, n_eigenvectors=9,
                                               optimize_parameters=True,
                                               kernel=kernel)
 
@@ -66,7 +66,7 @@ index, residuals = DiffusionMaps.parsimonious(eigenvectors, 2)
 print('most informative eigenvectors:', index)
 
 #%% md
-
+#
 # Plot the diffusion coordinates
 
 DiffusionMaps._plot_eigen_pairs(eigenvectors, pair_indices=[1, 2], color=X_color, figure_size=[12, 12])

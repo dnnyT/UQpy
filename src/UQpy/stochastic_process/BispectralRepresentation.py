@@ -24,16 +24,16 @@ class BispectralRepresentation:
          The :meth:`run` method is automatically called if `samples_number` is provided. If `samples_number` is not
          provided, then the :class:`.BispectralRepresentation` object is created but samples are not generated.
         :param power_spectrum: The discretized power spectrum.
-         For uni-variate, one-dimensional processes `power_spectrum` will be `list` or `ndarray` of length
-         `number_frequency_intervals`.
-         For uni-variate, multi-dimensional processes, `power_spectrum` will be a `list` or `ndarray` of size
-         (`number_frequency_intervals[0]`, ..., `number_frequency_intervals[number_of_dimensions-1]`)
+         - For uni-variate, one-dimensional processes `power_spectrum` will be :class:`list` or :class:`numpy.ndarray`
+         of length `number_frequency_intervals`.
+
+         - For uni-variate, multi-dimensional processes, `power_spectrum` will be a :class:`list` or :class:`numpy.ndarray` of size :code:`(number_frequency_intervals[0], ..., number_frequency_intervals[number_of_dimensions-1])`
+
         :param bispectrum: The prescribed bispectrum.
-         For uni-variate, one-dimensional processes, `bispectrum` will be a `list` or `ndarray` of size
-         (`number_frequency_intervals`, `number_frequency_intervals`)
-         For uni-variate, multi-dimensional processes, `bispectrum` will be a `list` or `ndarray` of size
-         (`number_frequency_intervals[0]`, ..., `number_frequency_intervals[number_of_dimensions-1]`,
-         `number_frequency_intervals[0]`, ..., `number_frequency_intervals[number_of_dimensions-1]`)
+         - For uni-variate, one-dimensional processes, `bispectrum` will be a :class:`list` or :class:`numpy.ndarray` of size :code:`(number_frequency_intervals, number_frequency_intervals)`
+
+         - For uni-variate, multi-dimensional processes, `bispectrum` will be a :class:`list` or :class:`numpy.ndarray` of size :code:`(number_frequency_intervals[0], ..., number_frequency_intervals[number_of_dimensions-1], number_frequency_intervals[0], ..., number_frequency_intervals[number_of_dimensions-1])`
+
         :param time_interval: Length of time discretizations (:math:`\Delta t`) for each dimension of size
          `number_of_dimensions`.
         :param frequency_interval: Length of frequency discretizations (:math:`\Delta \omega`) for each dimension of
@@ -41,8 +41,8 @@ class BispectralRepresentation:
         :param number_time_intervals: Number of time discretizations for each dimensions of size `number_of_dimensions`.
         :param number_frequency_intervals: Number of frequency discretizations for each dimension of size
          `number_of_dimensions`.
-        :param random_state: Random seed used to initialize the pseudo-random number generator. Default is None.
-         If an integer is provided, this sets the seed for an object of :class:`numpy.random.RandomState`. Otherwise,
+        :param random_state: Random seed used to initialize the pseudo-random number generator. Default is :any:`None`.
+         If an :any:`int` is provided, this sets the seed for an object of :class:`numpy.random.RandomState`. Otherwise,
          the object itself can be passed directly.
         """
         self.nsamples = samples_number
@@ -50,7 +50,7 @@ class BispectralRepresentation:
         self.number_time_intervals = np.array(number_time_intervals)
         self.frequency_interval = np.array(frequency_interval)
         self.time_interval = np.array(time_interval)
-        self.number_of_dimensions = len(power_spectrum.shape)
+        self.number_of_dimensions: int = len(power_spectrum.shape)
         """The dimensionality of the stochastic process."""
         self.power_spectrum = power_spectrum
         self.bispectrum = bispectrum
@@ -72,24 +72,24 @@ class BispectralRepresentation:
 
         self.logger = logging.getLogger(__name__)
 
-        self.b_ampl = np.absolute(bispectrum)
+        self.bispectrum_amplitude: float = np.absolute(bispectrum)
         """The amplitude of the bispectrum."""
-        self.b_real = np.real(bispectrum)
+        self.bispectrum_real: float = np.real(bispectrum)
         """The real part of the bispectrum."""
-        self.b_imag = np.imag(bispectrum)
+        self.bispectrum_imaginary: float = np.imag(bispectrum)
         """The imaginary part of the bispectrum."""
-        self.biphase = np.arctan2(self.b_imag, self.b_real)
+        self.biphase: NumpyFloatArray = np.arctan2(self.bispectrum_imaginary, self.bispectrum_real)
         """The biphase values of the bispectrum."""
         self.biphase[np.isnan(self.biphase)] = 0
 
-        self.phi = None
+        self.phi: NumpyFloatArray = None
         """The random phase angles used in the simulation of the stochastic process.
-        The shape of the phase angles (`samples_number`, `number_of_variables`, `number_frequency_intervals[0]`, ...,
-        `number_frequency_intervals[number_of_dimensions-1]`)"""
-        self.samples = None
+        The shape of the phase angles :code:`(samples_number, number_of_variables, number_frequency_intervals[0], ...,
+        number_frequency_intervals[number_of_dimensions-1])`"""
+        self.samples: NumpyFloatArray = None
         """Generated samples.
-        The shape of the samples is (`samples_number`, `number_of_variables`, `number_time_intervals[0]`, ...,
-        `number_time_intervals[number_of_dimensions-1]`)"""
+        The shape of the samples is :code:`(samples_number, number_of_variables, number_time_intervals[0], ...,
+        number_time_intervals[number_of_dimensions-1])`"""
 
         self.case = case
 
@@ -97,7 +97,7 @@ class BispectralRepresentation:
             self.case = "uni"
             self._compute_bicoherence_uni()
         else:
-            self.number_of_variables = self.power_spectrum.shape[0]
+            self.number_of_variables: int = self.power_spectrum.shape[0]
             """Number of variables in the stochastic process."""
             self.case = "multi"
 
@@ -108,7 +108,7 @@ class BispectralRepresentation:
         self.logger.info(
             "UQpy: Stochastic Process: Computing the partial bicoherence values."
         )
-        self.bc2 = np.zeros_like(self.b_real)
+        self.bc2 = np.zeros_like(self.bispectrum_real)
         """The bicoherence values of the power spectrum and bispectrum."""
         self.pure_power_sepctrum = np.zeros_like(self.power_spectrum)
         """The pure part of the power spectrum."""
@@ -146,14 +146,14 @@ class BispectralRepresentation:
                 wj = np.array(j)
                 wi = wk - wj
                 if (
-                    self.b_ampl[(*wi, *wj)] > 0
+                    self.bispectrum_amplitude[(*wi, *wj)] > 0
                     and self.pure_power_sepctrum[(*wi, *[])]
                     * self.pure_power_sepctrum[(*wj, *[])]
                     != 0
                 ):
                     self.bc2[(*wi, *wj)] = (
-                        self.b_ampl[(*wi, *wj)] ** 2
-                        / (
+                            self.bispectrum_amplitude[(*wi, *wj)] ** 2
+                            / (
                             self.pure_power_sepctrum[(*wi, *[])]
                             * self.pure_power_sepctrum[(*wj, *[])]
                             * self.power_spectrum[(*wk, *[])]) * np.prod(self.frequency_interval)
@@ -227,8 +227,8 @@ class BispectralRepresentation:
          If the :meth:`run` method is invoked multiple times, the newly generated samples will be appended to the
          existing samples.
 
-        The :meth:`run` method has no returns, although it creates and/or appends the `samples` attribute of the
-        :class:`.BispectralRepresentation` class.
+        The :meth:`run` method has no returns, although it creates and/or appends the :py:attr:`samples` attribute of
+        the :class:`.BispectralRepresentation` class.
         """
         if samples_number is None:
             raise ValueError(

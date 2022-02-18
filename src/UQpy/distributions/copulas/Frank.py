@@ -10,7 +10,7 @@ class Frank(Copula):
     def __init__(self, theta: float):
         """
 
-        :param theta: Parameter of the copula, real number in R
+        :param theta: Parameter of the copula, real number in :math:`\mathbb{R}`
         """
         super().__init__(theta=theta)
 
@@ -26,16 +26,12 @@ class Frank(Copula):
         :meth:`.JointCopula.cdf` method.
 
         :param unit_uniform_samples: Points (uniformly distributed) at which to evaluate the copula cdf, must be of
-         shape `(npoints, dimension)`.
+         shape :code:`(npoints, dimension)`.
 
         :return: Values of the cdf.
         """
         theta, u, v = self.extract_data(unit_uniform_samples)
-        tmp_ratio = (
-            (np.exp(-theta * u) - 1.0)
-            * (np.exp(-theta * v) - 1.0)
-            / (np.exp(-theta) - 1.0)
-        )
+        tmp_ratio = ((np.exp(-theta * u) - 1.0) * (np.exp(-theta * v) - 1.0) / (np.exp(-theta) - 1.0))
         cdf_val = -1.0 / theta * np.log(1.0 + tmp_ratio)
         return cdf_val
 

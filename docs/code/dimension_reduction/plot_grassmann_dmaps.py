@@ -9,7 +9,7 @@ from UQpy.dimension_reduction.grassmann_manifold.projections.SvdProjection impor
 from UQpy.dimension_reduction.grassmann_manifold.projections import KernelComposition
 from UQpy.dimension_reduction.grassmann_manifold import Grassmann
 from UQpy.dimension_reduction.kernels import ProjectionKernel
-from UQpy.dimension_reduction.dmaps.DiffusionMaps import DiffusionMaps
+from UQpy.dimension_reduction.diffusion_maps.DiffusionMaps import DiffusionMaps
 import sys
 import matplotlib.pyplot as plt
 
@@ -93,7 +93,7 @@ Grassmann_object = Grassmann(Grassmann_projection)
 kernel = ProjectionKernel()
 kernel_matrix = Grassmann_object.evaluate_kernel_matrix(kernel)
 
-Gdmaps_UQpy = DiffusionMaps(alpha=1.0, eigenvectors_number=5, is_sparse=True, neighbors_number=250,
+Gdmaps_UQpy = DiffusionMaps(alpha=1.0, n_eigenvectors=5, is_sparse=True, n_neighbors=250,
                             kernel_matrix=kernel_matrix)
 diff_coords, evals_uqpy, evecs_uqpy = Gdmaps_UQpy.fit()
 

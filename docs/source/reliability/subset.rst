@@ -1,7 +1,7 @@
 Subset Simulation
 -------------------
 
-In the subset simulation method [3]_ the probability of failure :math:`P_f`  is approximated by a product of probabilities
+In the subset simulation method :cite:`SubsetSimulation` the probability of failure :math:`P_f`  is approximated by a product of probabilities
 of more frequent events. That is, the failure event :math:`G = \{\textbf{x} \in \mathbb{R}^n:G(\textbf{x}) \leq 0\}`,
 is expressed as the of union of `M` nested intermediate events :math:`G_1,G_2,\cdots,G_M` such that
 :math:`G_1 \supset G_2 \supset \cdots \supset G_M`, and :math:`G = \cap_{i=1}^{M} G_i`. The intermediate failure events
@@ -24,11 +24,19 @@ and in the second stage is accepted/rejected based on whether the sample belongs
 :class:`.SubSetSimulation` can be used with any of the available (or custom) :class:`.MCMC` classes in the
 :py:mod:`sampling` module.
 
-SubsetSimulation Class Descriptions
+SubsetSimulation Class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Methods
+"""""""
 .. autoclass:: UQpy.reliability.SubsetSimulation
-    :members:
-    :private-members:
+    :members: run
 
-.. [3] S.K.  Au  and  J.L.  Beck. "Estimation  of  small  failure  probabilities  in  high  dimensions  by  subset  simulation", Probabilistic  Engineering Mechanics, 16(4):263–277, 2001.
+Attributes
+""""""""""
+.. autoattribute:: UQpy.reliability.SubsetSimulation.samples
+.. autoattribute:: UQpy.reliability.SubsetSimulation.performance_function_per_level
+.. autoattribute:: UQpy.reliability.SubsetSimulation.performance_threshold_per_level
+.. autoattribute:: UQpy.reliability.SubsetSimulation.failure_probability
+.. autoattribute:: UQpy.reliability.SubsetSimulation.independent_chains_CoV
+.. autoattribute:: UQpy.reliability.SubsetSimulation.dependent_chains_CoV

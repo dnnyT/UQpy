@@ -9,14 +9,14 @@ class Copula(ABC):
     def __init__(self, ordered_parameters: dict = None, **kwargs):
         """
         Define a copula for a multivariate distribution whose dependence structure is defined with a copula.
-        This class is used in support of the :class:`.JointCopula`: distribution class.
+        This class is used in support of the :class:`.JointCopula` class.
 
         :param ordered_parameters: List of parameter names
         :param kwargs: Parameters of the copula.
         """
-        self.parameters = kwargs
+        self.parameters: dict = kwargs
         """Parameters of the copula."""
-        self.ordered_parameters = ordered_parameters
+        self.ordered_parameters: dict = ordered_parameters
         """List of parameter names"""
         if self.ordered_parameters is None:
             self.ordered_parameters = tuple(kwargs.keys())
@@ -48,7 +48,7 @@ class Copula(ABC):
         """
         Perform some checks on the marginals, raise errors if necessary.
 
-        As an example, Archimedian copula are only defined for bi-variate continuous distributions, thus this method
+        As an example, Archimedian copulas are only defined for bi-variate continuous distributions, thus this method
         checks that marginals is of length 2 and continuous, and raise an error if that is not the case.
 
         :param marginals: List of 1D continuous distributions.
