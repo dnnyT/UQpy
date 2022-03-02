@@ -94,7 +94,7 @@ class SubsetSimulation:
 
         # Run the model for the initial samples, sort them by their performance function, and identify the
         # conditional level
-        self.runmodel_object.run(samples=np.atleast_2d(self.samples[step]))
+        self.runmodel_object._run(samples=np.atleast_2d(self.samples[step]))
         self.performance_function_per_level.append(np.squeeze(self.runmodel_object.qoi_list))
         g_ind = np.argsort(self.performance_function_per_level[step])
         self.performance_threshold_per_level.append(self.performance_function_per_level[step][g_ind[n_keep - 1]])
@@ -161,7 +161,7 @@ class SubsetSimulation:
                 # Run the model at each of the new sample points
                 x_run = self.mcmc_objects[step].samples[[x + (i + 1) * n_keep for x in ind_false], :]
                 if x_run.size != 0:
-                    self.runmodel_object.run(samples=x_run)
+                    self.runmodel_object._run(samples=x_run)
 
                     # Temporarily save the latest model runs
                     g_temp = np.asarray(self.runmodel_object.qoi_list[-len(x_run) :])

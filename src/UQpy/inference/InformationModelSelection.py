@@ -103,7 +103,7 @@ class InformationModelSelection:
             if n_optimizations is not None:
                 optimizations = n_optimizations[i]
 
-            parameter_estimator.run(n_optimizations=optimizations, initial_parameters=parameters)
+            parameter_estimator._run(n_optimizations=optimizations, initial_parameters=parameters)
 
             # Then minimize the criterion
             self.criterion_values[i], self.penalty_terms[i] = \

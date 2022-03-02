@@ -1,5 +1,7 @@
 import logging
 from typing import Callable, List
+
+import numpy as np
 from beartype import beartype
 from UQpy.sampling.mcmc.baseclass.MCMC import MCMC
 from UQpy.distributions import *
@@ -17,7 +19,7 @@ class MetropolisHastings(MCMC):
         burn_length: Annotated[int, Is[lambda x: x >= 0]] = 0,
         jump: int = 1,
         dimension: int = None,
-        seed: list = None,
+        seed: Union[np.ndarray, list] = None,
         save_log_pdf: bool = False,
         concatenate_chains: bool = True,
         n_chains: int = None,

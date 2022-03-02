@@ -131,7 +131,7 @@ class FORM(TaylorSeries):
         if seed_u is None and seed_x is None:
             seed = np.zeros(self.dimension)
         elif seed_u is None and seed_x is not None:
-            self.nataf_object.run(samples_x=seed_x.reshape(1, -1), jacobian=False)
+            self.nataf_object._run(samples_x=seed_x.reshape(1, -1), jacobian=False)
             seed_z = self.nataf_object.samples_z
             seed = Decorrelate(seed_z, self.nataf_object.corr_z)
         elif seed_u is not None and seed_x is None:
@@ -163,7 +163,7 @@ class FORM(TaylorSeries):
                     seed_z = Correlate(
                         samples_u=seed.reshape(1, -1), corr_z=self.nataf_object.corr_z
                     ).samples_z
-                    self.nataf_object.run(
+                    self.nataf_object._run(
                         samples_z=seed_z.reshape(1, -1), jacobian=True
                     )
                     x = self.nataf_object.samples_x
@@ -172,7 +172,7 @@ class FORM(TaylorSeries):
                 z = Correlate(
                     u[k, :].reshape(1, -1), self.nataf_object.corr_z
                 ).samples_z
-                self.nataf_object.run(samples_z=z, jacobian=True)
+                self.nataf_object._run(samples_z=z, jacobian=True)
                 x = self.nataf_object.samples_x
                 self.jzx = self.nataf_object.jxz
 
