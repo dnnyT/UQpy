@@ -9,10 +9,10 @@ from scipy.optimize import minimize
 from UQpy.utilities.Utilities import process_random_state
 from UQpy.surrogates.baseclass.Surrogate import Surrogate
 from UQpy.utilities.ValidationTypes import RandomStateType
-from UQpy.surrogates.gpr.correlation_models.baseclass.Kernel import Kernel
-from UQpy.surrogates.gpr.regression_models.baseclass.Regression import Regression
-from UQpy.surrogates.gpr.constraints.baseclass.Constraints import Constraints
-from UQpy.utilities.optimization.baseclass import Optimizer
+from UQpy.surrogates.gpr.kernels.baseclass.Kernel import Kernel
+# from UQpy.surrogates.gpr.regression_models.baseclass.Regression import Regression
+from UQpy.surrogates.gpr.constraints.baseclass.Constraints import ConstraintsGPR
+from UQpy.optimization.baseclass import Optimizer
 from scipy.linalg import cho_solve
 
 
@@ -20,13 +20,14 @@ class GaussianProcessRegressor(Surrogate):
     @beartype
     def __init__(
             self,
-            regression_model: Regression,
+            # regression_model: Regression,
             kernel: Kernel,
             hyperparameters: list,
             optimizer: Optimizer,
             bounds=None,
             optimize: bool = True,
-            optimize_constraints: Constraints = None,
+            optimize_constraints: ConstraintsGPR = None,
+            # optimize_constraints=None,
             optimizations_number: int = 1,
             normalize: bool = False,
             random_state: RandomStateType = None,
@@ -56,7 +57,7 @@ class GaussianProcessRegressor(Surrogate):
          provided, this sets the seed for an object of :class:`numpy.random.RandomState`. Otherwise, the
          object itself can be passed directly.
         """
-        self.regression_model = regression_model
+        # self.regression_model = regression_model
         self.kernel = kernel
         self.hyperparameters = np.array(hyperparameters)
         self.bounds = bounds
@@ -86,21 +87,15 @@ class GaussianProcessRegressor(Surrogate):
         self.F, self.K = None, None
         self.cc, self.alpha_ = None, None
 
-        if optimizer.bounds is None:
-            bounds_ = [[-3, 3]] * self.hyperparameters.shape[0]
-            bounds_[-1] = [-10, -5]
-            optimizer.update_bounds(bounds_)
+        if bounds is None:
+            if self.optimizer._bounds is None:
+                bounds_ = [[10**-3, 10**3]] * self.hyperparameters.shape[0]
+                bounds_[-1] = [10**-10, 10**-1]
+                self.bounds = bounds_
+            else:
+                self.bounds = self.optimizer._bounds
 
-        # if self.optimizer is None:
-        #     from scipy.optimize import fmin_l_bfgs_b
-        #
-        #     self.optimizer = fmin_l_bfgs_b
-        #
-        # elif not callable(self.optimizer):
-        #     raise TypeError(
-        #         "UQpy: Input optimizer should be None (set to scipy.optimize.minimize) or a callable."
-        #     )
-        self.jac = optimizer.supports_jacobian()
+        self.jac = False
         self.random_state = process_random_state(random_state)
 
     def fit(
@@ -156,36 +151,40 @@ class GaussianProcessRegressor(Surrogate):
 
         # Maximum Likelihood Estimation : Solving optimization problem to calculate hyperparameters
         if self.optimize:
-            starting_point = self.hyperparameters
+            # To ensure that cholesky of covariance matrix is computed again during optimization
+            self.alpha_ = None
+            lb = [np.log10(xy[0]) for xy in self.bounds]
+            ub = [np.log10(xy[1]) for xy in self.bounds]
+            # r = np.random.standard_normal(size=(self.optimizations_number, input_dim+2))
+            # x0 = r + lb
+            # starting_point = x0
+
+            starting_point = np.random.uniform(low=lb, high=ub, size=(self.optimizations_number, input_dim+2))
+            starting_point[0, :] = np.log10(self.hyperparameters)
+
             if self.optimize_constraints is not None:
                 cons = self.optimize_constraints.constraints(self.samples, self.values, self.predict)
                 self.optimizer.apply_constraints(constraints=cons)
-                # def nonnegative(x):
-                #     return x
-                #
-                # cons = ({'type': 'ineq', 'fun': nonnegative})
-                self.optimizer.apply_constraints(constraints=cons)
+                self.optimizer.apply_constraints_argument(self.optimize_constraints.args)
+            else:
+                log_bounds = [[np.log10(xy[0]), np.log10(xy[1])] for xy in self.bounds]
+                self.optimizer.update_bounds(bounds=log_bounds)
 
-            minimizer, fun_value = np.zeros([self.optimizations_number, input_dim]), \
-                                   np.zeros([self.optimizations_number, 1])
-
-            # print(self.kwargs_optimizer)
+            minimizer = np.zeros([self.optimizations_number, input_dim + 2])
+            fun_value = np.zeros([self.optimizations_number, 1])
 
             for i__ in range(self.optimizations_number):
                 p_ = self.optimizer.optimize(function=GaussianProcessRegressor.log_likelihood,
-                                             initial_guess=starting_point,
-                                             args=(self.correlation_model, s_, y_),
+                                             initial_guess=starting_point[i__, :],
+                                             args=(self.kernel, s_, y_),
                                              jac=self.jac)
-                print(p_.success)
-                # print(self.kwargs_optimizer)
-                minimizer[i__, :] = p_.x
-                fun_value[i__, 0] = p_.fun
-                # Generating new starting points using log-uniform distribution
-                if i__ != self.optimizations_number - 1:
-                    starting_point = stats.reciprocal.rvs([j[0] for j in self.optimizer.bounds],
-                                                          [j[1] for j in self.optimizer.bounds], 1,
-                                                          random_state=self.random_state)
-                    print(starting_point)
+
+                if isinstance(p_, np.ndarray):
+                    minimizer[i__, :] = p_
+                    fun_value[i__, 0] = GaussianProcessRegressor.log_likelihood(p_, self.kernel, s_, y_)
+                else:
+                    minimizer[i__, :] = p_.x
+                    fun_value[i__, 0] = p_.fun
 
             if min(fun_value) == np.inf:
                 raise NotImplementedError("Maximum likelihood estimator failed: Choose different starting point or "
@@ -194,46 +193,13 @@ class GaussianProcessRegressor(Surrogate):
             self.hyperparameters = 10**minimizer[t, :]
 
         # Updated Correlation matrix corresponding to MLE estimates of hyperparameters
-        self.K = self.correlation_model.c(x=s_, s=s_, params=self.hyperparameters[:-1]) + \
-                 np.eye(nsamples)*(10**self.hyperparameters[-1])**2
+        self.K = self.kernel.c(x=s_, s=s_, params=self.hyperparameters[:-1]) + \
+                 np.eye(nsamples)*(self.hyperparameters[-1])**2
 
-        self.cc = cholesky(self.K + 2 ** (-52) * np.eye(nsamples), lower=True)
+        self.cc = cholesky(self.K + 1e-10 * np.eye(nsamples), lower=True)
         self.alpha_ = cho_solve((self.cc, True), y_)
 
-        # self.beta, self.gamma, tmp = self._compute_additional_parameters(self.R)
-        # self.C_inv, self.F_dash, self.G, self.err_var = tmp[1], tmp[3], tmp[2], tmp[5]
-
         self.logger.info("UQpy: gpr fit complete.")
-
-    # def _compute_additional_parameters(self, correlation_matrix):
-    #     if self.normalize:
-    #         y_ = (self.values - self.value_mean) / self.value_std
-    #     else:
-    #         y_ = self.values
-    #     # Compute the regression coefficient (solving this linear equation: F * beta = Y)
-    #     # Eq: 3.8, DACE
-    #     c = cholesky(correlation_matrix + (10 + self.samples.shape[0]) * 2 ** (-52) * np.eye(self.samples.shape[0]),
-    #                  lower=True, check_finite=False)
-    #     c_inv = np.linalg.inv(c)
-    #     f_dash = np.linalg.solve(c, self.F)
-    #     y_dash = np.linalg.solve(c, y_)
-    #     q_, g_ = np.linalg.qr(f_dash)  # Eq: 3.11, DACE
-    #     # Check if F is a full rank matrix
-    #     if np.linalg.matrix_rank(g_) != min(np.size(self.F, 0), np.size(self.F, 1)):
-    #         raise NotImplementedError("Chosen regression functions are not sufficiently linearly independent")
-    #     # Design parameters (beta: regression coefficient)
-    #     beta = np.linalg.solve(g_, np.matmul(np.transpose(q_), y_dash))
-    #
-    #     # Design parameter (R * gamma = Y - F * beta = residual)
-    #     gamma = np.linalg.solve(c.T, (y_dash - np.matmul(f_dash, beta)))
-    #
-    #     # Computing the process variance (Eq: 3.13, DACE)
-    #     err_var = np.zeros(self.values.shape[1])
-    #     for i in range(self.values.shape[1]):
-    #         err_var[i] = (1 / self.samples.shape[0]) * (np.linalg.norm(y_dash[:, i] -
-    #                                                                    np.matmul(f_dash, beta[:, i])) ** 2)
-    #
-    #     return beta, gamma, (c, c_inv, g_, f_dash, y_dash, err_var)
 
     def predict(self, points, return_std: bool = False, hyperparameters: list = None):
         """
@@ -251,25 +217,37 @@ class GaussianProcessRegressor(Surrogate):
         if self.normalize:
             x_ = (x_ - self.sample_mean) / self.sample_std
             s_ = (self.samples - self.sample_mean) / self.sample_std
+            y_ = (self.values - self.value_mean) / self.value_std
         else:
             s_ = self.samples
+            y_ = self.values
         # fx, jf = self.regression_model.r(x_)
+
         if hyperparameters is None:
-            hyperparameters = self.hypermodel_parameters
-        k = self.correlation_model.c(
+            hyperparameters = self.hyperparameters
+        
+        if self.alpha_ is None:
+            # This is used during MLE computation
+            K = self.kernel.c(x=s_, s=s_, params=hyperparameters[:-1]) + \
+                np.eye(self.samples.shape[0])*(hyperparameters[-1])**2
+            cc = np.linalg.cholesky(K + 1e-10 * np.eye(self.samples.shape[0]))
+            alpha_ = cho_solve((cc, True), y_)
+        else:
+            cc, alpha_ = self.cc, self.alpha_
+        k = self.kernel.c(
             x=x_, s=s_, params=hyperparameters[:-1]
-        ) + np.eye(self.samples.shape[0])*(10**self.hyperparameters[-1])**2
-        y = k.T @ self.alpha_
+        )
+        y = k @ alpha_
         if self.normalize:
             y = self.value_mean + y * self.value_std
         if x_.shape[1] == 1:
             y = y.flatten()
 
         if return_std:
-            k1 = self.correlation_model.c(
+            k1 = self.kernel.c(
                  x=x_, s=x_, params=hyperparameters[:-1]
-            ) + np.eye(self.samples.shape[0]) * (10 ** self.hyperparameters[-1]) ** 2
-            var = k1 - k.T @ cho_solve((self.cc, True), k)
+            )
+            var = (k1 - k @ cho_solve((cc, True), k.T)).diagonal()
             mse = np.sqrt(var)
             if self.normalize:
                 mse = self.value_std * mse
@@ -320,20 +298,20 @@ class GaussianProcessRegressor(Surrogate):
         :param y: Output training data
         :return:
         """
-        # Return the log-likelihood function and it's gradient. Gradient is calculate using Central Difference
+        # Return the log-likelihood function and it's gradient. Gradient is calculated using Central Difference
         m = s.shape[0]
-        n = s.shape[1]
-        k__ = k_.c(x=s, s=s, params=10**p0[:, -1]) + np.eye(m)*(10**p0[-1])**2
-        try:
-            cc = cholesky(k__ + 2 ** (-52) * np.eye(m), lower=True)
-        except np.linalg.LinAlgError:
-            return np.inf
-
-        # Product of diagonal terms is negligible sometimes, even when cc exists.
-        if np.prod(np.diagonal(cc)) == 0:
-            return np.inf
+        k__ = k_.c(x=s, s=s, params=10**p0[:-1]) + np.eye(m)*(10**p0[-1])**2
+        cc = cholesky(k__ + 1e-10 * np.eye(m), lower=True)
+        # try:
+        #     cc = cholesky(k__ + 1e-10 * np.eye(m), lower=True)
+        # except np.linalg.LinAlgError:
+        #     return np.inf
+        #
+        # # Product of diagonal terms is negligible sometimes, even when cc exists.
+        # if np.prod(np.diagonal(cc)) == 0:
+        #     return np.inf
 
         term1 = y.T @ (cho_solve((cc, True), y))
         term2 = 2*np.sum(np.log(np.abs(np.diag(cc))))
 
-        return -0.5*(term1 + term2 + n*np.log(2*np.pi))
+        return 0.5*(term1 + term2 + m*np.log(2*np.pi))[0, 0]

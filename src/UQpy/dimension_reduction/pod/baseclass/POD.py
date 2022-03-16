@@ -4,7 +4,7 @@ from typing import Union
 
 import numpy as np
 
-from UQpy import PositiveInteger
+from UQpy.utilities.ValidationTypes import PositiveInteger
 
 
 class POD(ABC):

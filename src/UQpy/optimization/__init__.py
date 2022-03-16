@@ -1,3 +1,4 @@
 from UQpy.optimization.GradientDescent import GradientDescent
 from UQpy.optimization.StochasticGradientDescent import StochasticGradientDescent
 from UQpy.optimization.MinimizeOptimizer import MinimizeOptimizer
+from UQpy.optimization.FminCobyla import FminCobyla
