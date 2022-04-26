@@ -78,7 +78,7 @@ def test_rect_gerss():
     K = GaussianProcessRegression(kernel=RBF(), hyperparameters=[1, 1, 0.1], random_state=0,
                                   optimizer=MinimizeOptimizer('l-bfgs-b'), regression_model=LinearRegression(),
                                   optimizations_number=20, bounds=[[1e-2, 20], [1e-2, 20], [1e-5, 1e-2]],)
-    K.fit(samples=x.samples, values=rmodel.qoi_list)
+    # K.fit(samples=x.samples, values=rmodel.qoi_list)
     refinement = GradientEnhancedRefinement(strata=x.strata_object, runmodel_object=rmodel,
                                             surrogate=K, nearest_points_number=4)
     z = RefinedStratifiedSampling(stratified_sampling=x, random_state=2, refinement_algorithm=refinement)
@@ -122,7 +122,7 @@ def test_vor_gerss():
                                   optimizer=MinimizeOptimizer('l-bfgs-b'), regression_model=LinearRegression(),
                                   optimizations_number=20, bounds=[[1e-2, 20], [1e-2, 20], [1e-5, 1e-2]], )
 
-    K_.fit(samples=x_vor.samples, values=rmodel.qoi_list)
+    # K_.fit(samples=x_vor.samples, values=rmodel.qoi_list)
     z_vor = RefinedStratifiedSampling(stratified_sampling=x_vor, nsamples=6, random_state=x_vor.random_state,
                                       refinement_algorithm=GradientEnhancedRefinement(strata=x_vor.strata_object,
                                                                                       runmodel_object=rmodel,
@@ -163,7 +163,7 @@ def test_rss_runmodel_object():
                                   optimizations_number=20, bounds=[[1e-2, 20], [1e-2, 20], [1e-5, 1e-2]], )
     model = PythonModel(model_script='python_model_function.py', model_object_name="y_func")
     rmodel = RunModel(model=model)
-    rmodel.run()
+    rmodel.run(x.samples)
     K.fit(samples=x.samples, values=rmodel.qoi_list)
     with pytest.raises(BeartypeCallHintPepParamException):
         refinement = GradientEnhancedRefinement(strata=x.strata_object, runmodel_object='abc',
