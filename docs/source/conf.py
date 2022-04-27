@@ -53,6 +53,7 @@ extensions = [
 nbsphinx_custom_formats={
     ".md": ["jupytext.reads", {"fmt": "mystnb"}]
 }
+myst_enable_extensions = ["colon_fence"]
 autoclass_content = 'init'
 add_module_names = False
 autodoc_member_order = 'bysource'
