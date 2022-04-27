@@ -9,7 +9,7 @@ We'll learn to:
 - View the distribution's moments
 - Draw random samples
 
-:::{tip}
+:::{admonition,tip}
 Refer to the [Continuous 1D](./continuous_1d.md) example for a more detailed, step-by-step guide to using distributions in general.
 :::
 
